@@ -5,11 +5,11 @@
  */
 package net.finmath.montecarlo.interestrate.modelplugins;
 
-import java.util.Arrays;
-
 import net.finmath.montecarlo.RandomVariable;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.TimeDiscretizationInterface;
+
+import java.util.Arrays;
 
 /**
  * @author Christian Fries
@@ -30,7 +30,7 @@ public class LIBORVolatilityModelMaturityDependentFourParameterExponentialForm e
      * @param d The parameter d: if c &gt; 0 this is the very long term volatility level.
      */
     public LIBORVolatilityModelMaturityDependentFourParameterExponentialForm(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, double a, double b, double c, double d) {
-        super(timeDiscretization, liborPeriodDiscretization);
+        super(timeDiscretization, liborPeriodDiscretization, true);
         this.a = new double[liborPeriodDiscretization.getNumberOfTimeSteps()];	Arrays.fill(this.a, a);
         this.b = new double[liborPeriodDiscretization.getNumberOfTimeSteps()];	Arrays.fill(this.b, b);
         this.c = new double[liborPeriodDiscretization.getNumberOfTimeSteps()];	Arrays.fill(this.c, c);
@@ -46,7 +46,7 @@ public class LIBORVolatilityModelMaturityDependentFourParameterExponentialForm e
      * @param d The parameter d: if c &gt; 0 this is the very long term volatility level.
      */
     public LIBORVolatilityModelMaturityDependentFourParameterExponentialForm(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, double[] a, double[] b, double[] c, double[] d) {
-        super(timeDiscretization, liborPeriodDiscretization);
+        super(timeDiscretization, liborPeriodDiscretization, true);
         this.a = a;
         this.b = b;
         this.c = c;
@@ -66,6 +66,8 @@ public class LIBORVolatilityModelMaturityDependentFourParameterExponentialForm e
 
 	@Override
 	public void setParameter(double[] parameter) {
+        if(!isCalibrateable) return;
+
         Arrays.fill(this.a, parameter[0]);
         Arrays.fill(this.b, parameter[1]);
         Arrays.fill(this.c, parameter[2]);

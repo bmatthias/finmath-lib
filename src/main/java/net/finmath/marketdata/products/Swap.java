@@ -111,6 +111,7 @@ public class Swap extends AbstractAnalyticProduct implements AnalyticProductInte
 		return getForwardSwapRate(new RegularSchedule(fixTenor), new RegularSchedule(floatTenor), forwardCurve);
 	}
 
+    //TODO: "Bug": This may produce wrong results if forwardCurve.getDiscountCurveName() does not return the given discount curve's name.
 	static public double getForwardSwapRate(TimeDiscretizationInterface fixTenor, TimeDiscretizationInterface floatTenor, ForwardCurveInterface forwardCurve, DiscountCurveInterface discountCurve) {
 		AnalyticModel model = null;
 		if(discountCurve != null) {

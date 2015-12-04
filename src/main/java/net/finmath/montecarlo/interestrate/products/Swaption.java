@@ -13,6 +13,7 @@ import net.finmath.marketdata.model.curves.ForwardCurveInterface;
 import net.finmath.marketdata.products.Swap;
 import net.finmath.marketdata.products.SwapAnnuity;
 import net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulationInterface;
+import net.finmath.montecarlo.interestrate.MultiCurveLIBORMarketModel;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.TimeDiscretization;
 import net.finmath.time.TimeDiscretizationInterface;
@@ -112,30 +113,36 @@ public class Swaption extends AbstractLIBORMonteCarloProduct {
 		 * Calculate value of the swap at exercise date on each path (beware of perfect foresight - all rates are simulationTime=exerciseDate)
 		 */
         RandomVariableInterface valueOfSwapAtExerciseDate	= model.getRandomVariableForConstant(/*fixingDates[fixingDates.length-1],*/0.0);
-		
+
         // Calculate the value of the swap by working backward through all periods
-		for(int period=fixingDates.length-1; period>=0; period--)
-		{
+		for(int period=fixingDates.length-1; period>=0; period--) {
 			double fixingDate	= fixingDates[period];
 			double paymentDate	= paymentDates[period];
 			double swaprate		= swaprates[period];
 			
 			double periodLength	= periodLengths != null ? periodLengths[period] : paymentDate - fixingDate;
-			
-			// Get random variables - note that this is the rate at simulation time = exerciseDate
-			RandomVariableInterface libor	= model.getLIBOR(exerciseDate, fixingDate, paymentDate);
-			
+
+            // Get random variables - note that this is the rate at simulation time = exerciseDate
+            RandomVariableInterface libor;
+            RandomVariableInterface forward;
+            if (model.getModel() instanceof MultiCurveLIBORMarketModel) {
+                libor = model.getLIBOR(exerciseDate, fixingDate, paymentDate);
+                forward = ((MultiCurveLIBORMarketModel)model.getModel()).getForward(model.getTimeIndex(exerciseDate), model.getLiborPeriodIndex(fixingDate));
+            } else {
+                libor = forward = model.getLIBOR(exerciseDate, fixingDate, paymentDate);
+            }
+
             // Add payment received at end of period
 			RandomVariableInterface payoff = libor.sub(swaprate).mult(periodLength);
 			valueOfSwapAtExerciseDate = valueOfSwapAtExerciseDate.add(payoff);
 
 			// Discount back to beginning of period
-			valueOfSwapAtExerciseDate = valueOfSwapAtExerciseDate.discount(libor, paymentDate - fixingDate);
+			valueOfSwapAtExerciseDate = valueOfSwapAtExerciseDate.discount(forward, paymentDate - fixingDate);
 		}
         
         // If the exercise date is not the first periods start date, then discount back to the exercise date (calculate the forward starting swap)
 		if(fixingDates[0] != exerciseDate) {
-			RandomVariableInterface libor	= model.getLIBOR(exerciseDate, exerciseDate, fixingDates[0]);
+			RandomVariableInterface libor = model.getLIBOR(exerciseDate, exerciseDate, fixingDates[0]);
 			double periodLength	= fixingDates[0] - exerciseDate;
 
 			// Discount back to beginning of period

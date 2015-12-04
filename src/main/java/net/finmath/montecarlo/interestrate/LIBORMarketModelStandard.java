@@ -74,19 +74,6 @@ public class LIBORMarketModelStandard extends AbstractModel implements LIBORMark
 	// This is a cache of the integrated covariance.
 	private double[][][]	integratedLIBORCovariance;
 
-	public static class CalibrationItem {
-		public final AbstractLIBORMonteCarloProduct		calibrationProduct;
-		public final double								calibrationTargetValue;
-		public final double								calibrationWeight;
-
-		public CalibrationItem(AbstractLIBORMonteCarloProduct calibrationProduct, double calibrationTargetValue, double calibrationWeight) {
-			super();
-			this.calibrationProduct		= calibrationProduct;
-			this.calibrationTargetValue	= calibrationTargetValue;
-			this.calibrationWeight		= calibrationWeight;
-		}
-	}
-
 	/**
 	 * Creates a LIBOR Market Model for given covariance.
 	 * 

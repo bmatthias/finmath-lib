@@ -257,13 +257,14 @@ public class ForwardCurve extends AbstractForwardCurve implements Serializable {
 	 * curve.
 	 * 
 	 * @param name The name of this curve.
+     * @param discountCurveName The name of a discount curve associated with this index (associated with it's funding or collateralization), if any.
 	 * @param times A vector of given time points.
 	 * @param givenForwards A vector of given forwards (corresponding to the given time points).
 	 * @param paymentOffset The maturity of the underlying index modeled by this curve.
 	 * @return A new ForwardCurve object.
 	 */
-	public static ForwardCurve createForwardCurveFromForwards(String name, double[] times, double[] givenForwards, double paymentOffset) {
-		ForwardCurve forwardCurve = new ForwardCurve(name, paymentOffset, InterpolationEntityForward.FORWARD, null);
+	public static ForwardCurve createForwardCurveFromForwards(String name, String discountCurveName, double[] times, double[] givenForwards, double paymentOffset) {
+		ForwardCurve forwardCurve = new ForwardCurve(name, paymentOffset, InterpolationEntityForward.FORWARD, discountCurveName);
 
 		for(int timeIndex=0; timeIndex<times.length;timeIndex++) {
 			double	fixingTime	= times[timeIndex];
@@ -273,6 +274,32 @@ public class ForwardCurve extends AbstractForwardCurve implements Serializable {
 
 		return forwardCurve;
 	}
+
+    /**
+     * Create a forward curve from given times and given forwards.
+     *
+     * The forward F(t) of an index is such that
+     * F(t) * D(t+p) equals the market price of the corresponding index fixed in t and paid in t+d, where t is the fixing time
+     * of the index and t+p is the payment time of the index. F(t) is the corresponding forward and D is the associated discount
+     * curve.
+     *
+     * @param name The name of this curve.
+     * @param times A vector of given time points.
+     * @param givenForwards A vector of given forwards (corresponding to the given time points).
+     * @param paymentOffset The maturity of the underlying index modeled by this curve.
+     * @return A new ForwardCurve object.
+     */
+    public static ForwardCurve createForwardCurveFromForwards(String name, double[] times, double[] givenForwards, double paymentOffset) {
+        ForwardCurve forwardCurve = new ForwardCurve(name, paymentOffset, InterpolationEntityForward.FORWARD, null);
+
+        for(int timeIndex=0; timeIndex<times.length;timeIndex++) {
+            double	fixingTime	= times[timeIndex];
+            boolean	isParameter	= (fixingTime > 0);
+            forwardCurve.addForward(null, fixingTime, givenForwards[timeIndex], isParameter);
+        }
+
+        return forwardCurve;
+    }
 
 	/**
 	 * Create a forward curve from given times and discount factors.
@@ -290,8 +317,29 @@ public class ForwardCurve extends AbstractForwardCurve implements Serializable {
 	 * @param paymentOffset The maturity of the underlying index modeled by this curve.
 	 * @return A new ForwardCurve object.
 	 */
-	public static ForwardCurve createForwardCurveFromDiscountFactors(String name, double[] times, double[] givenDiscountFactors, double paymentOffset) {
-		ForwardCurve forwardCurve = new ForwardCurve(name, paymentOffset, InterpolationEntityForward.FORWARD, null);
+    public static ForwardCurve createForwardCurveFromDiscountFactors(String name, double[] times, double[] givenDiscountFactors, double paymentOffset) {
+        return createForwardCurveFromDiscountFactors(name, times, givenDiscountFactors, paymentOffset, null);
+    }
+
+    /**
+     * Create a forward curve from given times and discount factors.
+     *
+     * The forward curve will have times.length-1 fixing times from times[0] to times[times.length-2]
+     * where the forwards are calculated via
+     * <code>
+     * 			forward[timeIndex] = (givenDiscountFactors[timeIndex]/givenDiscountFactors[timeIndex+1]-1.0) / (times[timeIndex+1] - times[timeIndex]);
+     * </code>
+     * Note: If time[0] &gt; 0, then the discount factor 1.0 will inserted at time 0.0
+     *
+     * @param name The name of this curve.
+     * @param times A vector of given time points.
+     * @param givenDiscountFactors A vector of given discount factors (corresponding to the given time points).
+     * @param paymentOffset The maturity of the underlying index modeled by this curve.
+     * @param discountCurveName The discount curve to be used for discounting prices calculated from this forward curve.
+     * @return A new ForwardCurve object.
+     */
+	public static ForwardCurve createForwardCurveFromDiscountFactors(String name, double[] times, double[] givenDiscountFactors, double paymentOffset, String discountCurveName) {
+		ForwardCurve forwardCurve = new ForwardCurve(name, paymentOffset, InterpolationEntityForward.FORWARD, discountCurveName);
 
 		if(times.length == 0) throw new IllegalArgumentException("Vector of times must not be empty.");
 
@@ -310,6 +358,44 @@ public class ForwardCurve extends AbstractForwardCurve implements Serializable {
 
 		return forwardCurve;
 	}
+
+    /**
+     * Create a forward curve from given times and discount factors.
+     *
+     * The forward curve will have times.length-1 fixing times from times[0] to times[times.length-2]
+     * where the forwards are calculated via
+     * <code>
+     * 			forward[timeIndex] = (givenDiscountFactors[timeIndex]/givenDiscountFactors[timeIndex+1]-1.0) / (times[timeIndex+1] - times[timeIndex]);
+     * </code>
+     * Note: If time[0] &gt; 0, then the discount factor 1.0 will inserted at time 0.0
+     *
+     * @param name The name of this curve.
+     * @param times A vector of given time points.
+     * @param givenDiscountFactors A vector of given discount factors (corresponding to the given time points).
+     * @param referenceDate The reference date for this code, i.e., the date which defined t=0.
+     * @param paymentOffsetCode The maturity of the index modeled by this curve.
+     * @return A new ForwardCurve object.
+     */
+    public static ForwardCurve createForwardCurveFromDiscountFactors(String name, double[] times, double[] givenDiscountFactors, Calendar referenceDate, String paymentOffsetCode) {
+        ForwardCurve forwardCurve = new ForwardCurve(name, referenceDate, paymentOffsetCode, InterpolationEntityForward.FORWARD, null);
+
+        if(times.length == 0) throw new IllegalArgumentException("Vector of times must not be empty.");
+
+        if(times[0] > 0) {
+            // Add first forward
+            double forward = (1.0/givenDiscountFactors[0]-1.0) / (times[0] - 0);
+            forwardCurve.addForward(null, 0.0, forward, true);
+        }
+
+        for(int timeIndex=0; timeIndex<times.length-1;timeIndex++) {
+            double 	forward		= (givenDiscountFactors[timeIndex]/givenDiscountFactors[timeIndex+1]-1.0) / (times[timeIndex+1] - times[timeIndex]);
+            double	fixingTime	= times[timeIndex];
+            boolean	isParameter	= (fixingTime > 0);
+            forwardCurve.addForward(null, fixingTime, forward, isParameter);
+        }
+
+        return forwardCurve;
+    }
 
 	/**
 	 * Create a forward curve from given times and given forwards with respect to an associated discount curve and payment offset.

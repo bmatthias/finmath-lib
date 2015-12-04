@@ -68,12 +68,27 @@ public class DiscountCurveFromForwardCurve extends AbstractCurve implements Seri
 	 * @param periodLengthTimeScaling A scaling factor applied to d, adjusting for the internal double time to the period length daycount fraction (note that this may only be an approximate solution to capture daycount effects).
 	 */
 	public DiscountCurveFromForwardCurve(ForwardCurveInterface forwardCurve, double periodLengthTimeScaling) {
-		super("DiscountCurveFromForwardCurve" + forwardCurve.getName() + ")", null);
-
-		this.forwardCurve	= forwardCurve;
-		this.timeScaling	= periodLengthTimeScaling;
+		this("DiscountCurveFromForwardCurve" + forwardCurve.getName() + ")", forwardCurve, periodLengthTimeScaling);
 	}
-   
+
+    /**
+     * Create a discount curve using a given forward curve.
+     * The discount factors df(t) are defined at t = k * d for integers k
+     * via df(t+d) = df(t) / (1 + f(t) * d) and
+     * for t = k * d and 0 &lt; r &lt; d
+     * via df(t+r) = df(t) / (1 + f(t) * r)
+     * where d is a given the payment offset and f(t) is the forward curve.
+     *
+     * @param forwardCurve The forward curve used for calculation of the discount factors.
+     * @param periodLengthTimeScaling A scaling factor applied to d, adjusting for the internal double time to the period length daycount fraction (note that this may only be an approximate solution to capture daycount effects).
+     */
+    public DiscountCurveFromForwardCurve(String name, ForwardCurveInterface forwardCurve, double periodLengthTimeScaling) {
+        super(name, null);
+
+        this.forwardCurve	= forwardCurve;
+        this.timeScaling	= periodLengthTimeScaling;
+    }
+
 	/**
 	 * Create a discount curve using a given forward curve.
 	 * The discount factors df(t) are defined at t = k * d for integers k
@@ -101,6 +116,21 @@ public class DiscountCurveFromForwardCurve extends AbstractCurve implements Seri
 	public DiscountCurveFromForwardCurve(ForwardCurveInterface forwardCurve) {
 		this(forwardCurve, 1.0);
 	}
+
+    /**
+     * Create a discount curve using a given forward curve.
+     * The discount factors df(t) are defined at t = k * d for integers k
+     * via df(t+d) = df(t) / (1 + f(t) * d) and
+     * for t = k * d and 0 &lt; r &lt; d
+     * via df(t+r) = df(t) / (1 + f(t) * r)
+     * where d is a given the payment offset and f(t) is the forward curve.
+     *
+     * @param name The name of this discount curve.
+     * @param forwardCurve The forward curve used for calculation of the discount factors.
+     */
+    public DiscountCurveFromForwardCurve(String name, ForwardCurveInterface forwardCurve) {
+        this(name, forwardCurve, 1.0);
+    }
 
 	/* (non-Javadoc)
 	 * @see net.finmath.marketdata.DiscountCurveInterface#getDiscountFactor(double)

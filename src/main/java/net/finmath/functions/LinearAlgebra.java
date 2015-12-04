@@ -10,17 +10,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-import org.apache.commons.math3.linear.ArrayRealVector;
-import org.apache.commons.math3.linear.CholeskyDecomposition;
-import org.apache.commons.math3.linear.DecompositionSolver;
-import org.apache.commons.math3.linear.EigenDecomposition;
-import org.apache.commons.math3.linear.SingularValueDecomposition;
+import org.apache.commons.math3.linear.*;
 
 import cern.colt.matrix.DoubleMatrix1D;
 import cern.colt.matrix.DoubleMatrix2D;
 import cern.colt.matrix.impl.DenseDoubleMatrix2D;
 import cern.colt.matrix.linalg.EigenvalueDecomposition;
+import org.jblas.DoubleMatrix;
+import org.jblas.Eigen;
 
 /**
  * This class implements some methods from linear algebra (e.g. solution of a linear equation, PCA).
@@ -121,31 +118,57 @@ public class LinearAlgebra {
 	 * @return Matrix of n Eigenvectors (columns) (matrix is given as double[n][numberOfFactors], where n is the number of rows of the correlationMatrix.
 	 */
 	public static double[][] getFactorMatrix(double[][] correlationMatrix, int numberOfFactors) {
-		boolean  isUseApacheCommonsMath = true;
+        boolean  isUseApacheCommonsMath = false;
+        boolean  isUseColt = false;
 		if(isUseApacheCommonsMath) {
-			return getFactorMatrixUsingCommonsMath(correlationMatrix, numberOfFactors);
-		}
-		else {
+            return getFactorMatrixUsingCommonsMath(correlationMatrix, numberOfFactors);
+		} else if(isUseColt) {
 			return getFactorMatrixUsingColt(new DenseDoubleMatrix2D(correlationMatrix), numberOfFactors).toArray();
-		}
-	}
+		} else {
+            return getFactorMatrixUsingJblas(correlationMatrix, numberOfFactors);
+        }
+    }
 
-	/**
-	 * Returns a correlation matrix which has rank &lt; n and for which the first n factors agree with the factors of correlationMatrix.
-	 * 
-	 * @param correlationMatrix The given correlation matrix.
-	 * @param numberOfFactors The requested number of factors (Eigenvectors).
-	 * @return Factor reduced correlation matrix.
-	 */
+    /**
+     * Returns a correlation matrix which has rank &lt; n and for which the first n factors agree with the factors of correlationMatrix.
+     *
+     * @param correlationMatrix The given correlation matrix.
+     * @param numberOfFactors The requested number of factors (Eigenvectors).
+     * @return Factor reduced correlation matrix.
+     */
 	public static double[][] factorReduction(double[][] correlationMatrix, int numberOfFactors) {
 		boolean  isUseApacheCommonsMath = true;
+        boolean  isUseColt = false;
 		if(isUseApacheCommonsMath) {
-			return factorReductionUsingCommonsMath(correlationMatrix, numberOfFactors);
-		}
-		else {
+            return factorReductionUsingCommonsMath(correlationMatrix, numberOfFactors);
+        } else if(isUseColt) {
 			return factorReductionUsingColt(new DenseDoubleMatrix2D(correlationMatrix), numberOfFactors).toArray();
-		}
-	}
+		} else {
+            return factorReductionUsingCommonsMath(correlationMatrix, numberOfFactors);
+        }
+    }
+
+    /**
+     * Returns the matrix of the n Eigenvectors corresponding to the first n largest Eigenvalues of a correlation matrix.
+     * These eigenvectors can also be interpreted as "principal components" (i.e., the method implements the PCA).
+     *
+     * @param correlationMatrix The given correlation matrix.
+     * @param numberOfFactors The requested number of factors (Eigenvectors).
+     * @return Matrix of n Eigenvectors (columns) (matrix is given as double[n][numberOfFactors], where n is the number of rows of the correlationMatrix.
+     */
+    private static double[][] getFactorMatrixUsingJblas(double[][] correlationMatrix, int numberOfFactors) {
+        DoubleMatrix[] eigenDecomp = Eigen.symmetricEigenvectors(new DoubleMatrix(correlationMatrix));
+
+        DoubleMatrix eigenValueMatrix	= eigenDecomp[1];
+        DoubleMatrix eigenVectorMatrix	= eigenDecomp[0];
+
+        double[] eigenValues = new double[eigenValueMatrix.rows];
+        for (int i = 0; i < eigenValueMatrix.rows; i++) {
+            eigenValues[i] = eigenValueMatrix.get(i, i);
+        }
+
+        return factorMatrixFromEigenDecomposition(numberOfFactors, eigenValues, eigenVectorMatrix.toArray2());
+    }
 
 	/**
 	 * Returns the matrix of the n Eigenvectors corresponding to the first n largest Eigenvalues of a correlation matrix.
@@ -164,41 +187,46 @@ public class LinearAlgebra {
 		double[]	eigenValues			= eigenDecomp.getRealEigenvalues();
 		double[][]	eigenVectorMatrix	= eigenDecomp.getV().getData();
 
-		class EigenValueIndex implements Comparable<EigenValueIndex> {
-			private int index;
-			Double value;
+        return factorMatrixFromEigenDecomposition(numberOfFactors, eigenValues, eigenVectorMatrix);
+	}
 
-			public EigenValueIndex(int index, double value) {
-				this.index = index; this.value = value;
-			}
+    public static double[][] factorMatrixFromEigenDecomposition(int numberOfFactors, double[] eigenValues, double[][] eigenVectorMatrix) {
+        class EigenValueIndex implements Comparable<EigenValueIndex> {
+            private int index;
+            Double value;
 
-			@Override
-			public int compareTo(EigenValueIndex o) { return o.value.compareTo(value); }
-		};
-		List<EigenValueIndex> eigenValueIndices = new ArrayList<EigenValueIndex>();
-		for(int i=0; i<eigenValues.length; i++) eigenValueIndices.add(i,new EigenValueIndex(i,eigenValues[i]));
-		Collections.sort(eigenValueIndices);
-		
-		// Extract factors corresponding to the largest eigenvalues
-		double[][] factorMatrix = new double[eigenValues.length][numberOfFactors];
-		for (int factor = 0; factor < numberOfFactors; factor++) {
-			int		eigenVectorIndex	= (int) eigenValueIndices.get(factor).index;
-			double	eigenValue			= eigenValues[eigenVectorIndex];
-			double	signChange			= eigenVectorMatrix[0][eigenVectorIndex] > 0.0 ? 1.0 : -1.0;		// Convention: Have first entry of eigenvector positive. This is to make results more consistent.
+            public EigenValueIndex(int index, double value) {
+                this.index = index; this.value = value;
+            }
+
+            @Override
+            public int compareTo(EigenValueIndex o) { return o.value.compareTo(value); }
+        }
+        ;
+        List<EigenValueIndex> eigenValueIndices = new ArrayList<EigenValueIndex>();
+        for(int i=0; i<eigenValues.length; i++) eigenValueIndices.add(i,new EigenValueIndex(i,eigenValues[i]));
+        Collections.sort(eigenValueIndices);
+
+        // Extract factors corresponding to the largest eigenvalues
+        double[][] factorMatrix = new double[eigenValues.length][numberOfFactors];
+        for (int factor = 0; factor < numberOfFactors; factor++) {
+            int		eigenVectorIndex	= (int) eigenValueIndices.get(factor).index;
+            double	eigenValue			= eigenValues[eigenVectorIndex];
+            double	signChange			= eigenVectorMatrix[0][eigenVectorIndex] > 0.0 ? 1.0 : -1.0;		// Convention: Have first entry of eigenvector positive. This is to make results more consistent.
             double  eigenVectorNormSquared     = 0.0;
             for (int row = 0; row < eigenValues.length; row++) {
                 eigenVectorNormSquared += eigenVectorMatrix[row][eigenVectorIndex] * eigenVectorMatrix[row][eigenVectorIndex];
             }
             eigenValue = Math.max(eigenValue,0.0);
-			for (int row = 0; row < eigenValues.length; row++) {
-				factorMatrix[row][factor] = signChange * Math.sqrt(eigenValue/eigenVectorNormSquared) * eigenVectorMatrix[row][eigenVectorIndex];
-			}
-		}
+            for (int row = 0; row < eigenValues.length; row++) {
+                factorMatrix[row][factor] = signChange * Math.sqrt(eigenValue/eigenVectorNormSquared) * eigenVectorMatrix[row][eigenVectorIndex];
+            }
+        }
 
-		return factorMatrix;
-	}
+        return factorMatrix;
+    }
 
-	/**
+    /**
 	 * Returns the matrix of the n Eigenvectors corresponding to the first n largest Eigenvalues of a correlation matrix.
 	 * These eigenvectors can also be interpreted as "principal components" (i.e., the method implements the PCA).
 	 * 
@@ -254,28 +282,33 @@ public class LinearAlgebra {
 		double[][] factorMatrix = getFactorMatrix(correlationMatrix, numberOfFactors);
 
 		// Renormalized rows
-		for (int row = 0; row < correlationMatrix.length; row++) {
-			double sumSquared = 0;
-			for (int factor = 0; factor < numberOfFactors; factor++)
-				sumSquared += factorMatrix[row][factor] * factorMatrix[row][factor];
-			if(sumSquared != 0) {
-			    for (int factor = 0; factor < numberOfFactors; factor++)
-					factorMatrix[row][factor] = factorMatrix[row][factor] / Math.sqrt(sumSquared);
-			}
-			else {
-			    // This is a rare case: The factor reduction of a completely decorrelated system to 1 factor
-			    for (int factor = 0; factor < numberOfFactors; factor++)
-					factorMatrix[row][factor] = 1.0;			    
-			}
-		}
+        normalizeRows(factorMatrix);
 
-		// Orthogonalized again
+        // Orthogonalized again
 		double[][] reducedCorrelationMatrix = (new Array2DRowRealMatrix(factorMatrix).multiply(new Array2DRowRealMatrix(factorMatrix).transpose())).getData();
-		
+
 		return getFactorMatrix(reducedCorrelationMatrix, numberOfFactors);
 	}
 
-	/**
+    public static void normalizeRows(double[][] matrix) {
+        for (int row = 0; row < matrix.length; row++) {
+            int numberOfFactors = matrix[row].length;
+            double sumSquared = 0;
+            for (int factor = 0; factor < numberOfFactors; factor++)
+                sumSquared += matrix[row][factor] * matrix[row][factor];
+            if(sumSquared != 0) {
+                for (int factor = 0; factor < numberOfFactors; factor++)
+                    matrix[row][factor] = matrix[row][factor] / Math.sqrt(sumSquared);
+            }
+            else {
+                // This is a rare case: The factor reduction of a completely decorrelated system to 1 factor
+                for (int factor = 0; factor < numberOfFactors; factor++)
+                    matrix[row][factor] = 1.0;
+            }
+        }
+    }
+
+    /**
 	 * Returns a correlation matrix which has rank &lt; n and for which the first n factors agree with the factors of correlationMatrix.
 	 * 
 	 * @param correlationMatrix The given correlation matrix.
@@ -309,4 +342,90 @@ public class LinearAlgebra {
 		
 		return getFactorMatrixUsingColt(reducedCorrelationMatrix, numberOfFactors);
 	}
+
+    public static RealMatrix getFactorMatrixFromBlockCorrelationMatrix(int numberOfFactors,
+                                                                       double[][] firstCurveCorrelationMatrix,
+                                                                       double[][] secondCurveCorrelationMatrix,
+                                                                       double[][] curvesCorrelationMatrix) {
+        int dimension = firstCurveCorrelationMatrix.length;
+        Array2DRowRealMatrix factorMatrix;
+        RRQRDecomposition rrqrDecomposition = new RRQRDecomposition(new Array2DRowRealMatrix(firstCurveCorrelationMatrix));
+        if (rrqrDecomposition.getRank(1e-10) == dimension) {
+            RealMatrix inverseOfFirstMatrix = rrqrDecomposition.getSolver().getInverse();
+            RealMatrix C = new Array2DRowRealMatrix(curvesCorrelationMatrix);
+            RealMatrix inverseATimesC = inverseOfFirstMatrix.multiply(C);
+            Array2DRowRealMatrix B = (Array2DRowRealMatrix)new Array2DRowRealMatrix(secondCurveCorrelationMatrix).subtract(C.transpose().multiply(inverseATimesC));
+
+            Array2DRowRealMatrix N = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
+            N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), 0, 0);
+            N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), dimension, dimension);
+            N.setSubMatrix(inverseATimesC.getData(), 0, dimension);
+
+            /*
+             * Perform a factor decomposition (and reduction if numberOfFactors < correlationMatrix.columns())
+             */
+            fixSymmetry(B.getDataRef());
+
+            double[][] firstFactorMatrix = factorReduction(firstCurveCorrelationMatrix, (int) Math.ceil(0.5 * numberOfFactors));
+            double[][] secondFactorMatrix = factorReduction(B.getData(), numberOfFactors / 2);
+
+            RealMatrix M = new Array2DRowRealMatrix(2 * dimension, numberOfFactors);
+            M.setSubMatrix(firstFactorMatrix, 0, 0);
+            M.setSubMatrix(secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
+
+            factorMatrix = new Array2DRowRealMatrix(N.transpose().multiply(M).getData());
+            /*normalizeRows(factorMatrix.getDataRef());
+
+            double[][] reducedCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
+            factorMatrix = new Array2DRowRealMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));*/
+        } else {
+            rrqrDecomposition = new RRQRDecomposition(new Array2DRowRealMatrix(secondCurveCorrelationMatrix));
+            if (rrqrDecomposition.getRank(1e-10) == dimension) {
+                RealMatrix inverseOfSecondMatrix = rrqrDecomposition.getSolver().getInverse();
+                RealMatrix C = new Array2DRowRealMatrix(curvesCorrelationMatrix);
+                RealMatrix cTimesInverseD = C.multiply(inverseOfSecondMatrix);
+                Array2DRowRealMatrix B = (Array2DRowRealMatrix)new Array2DRowRealMatrix(firstCurveCorrelationMatrix).subtract(cTimesInverseD.multiply(C.transpose()));
+
+                Array2DRowRealMatrix N = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
+                N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), 0, 0);
+                N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), dimension, dimension);
+                N.setSubMatrix(cTimesInverseD.getData(), 0, dimension);
+
+                /*
+                 * Perform a factor decomposition (and reduction if numberOfFactors < correlationMatrix.columns())
+                 */
+                fixSymmetry(B.getDataRef());
+
+                double[][] firstFactorMatrix = factorReduction(B.getData(), (int) Math.ceil(0.5 * numberOfFactors));
+                double[][] secondFactorMatrix = factorReduction(secondCurveCorrelationMatrix, numberOfFactors / 2);
+
+                RealMatrix M = new Array2DRowRealMatrix(2 * dimension, numberOfFactors);
+                M.setSubMatrix(firstFactorMatrix, 0, 0);
+                M.setSubMatrix(secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
+
+                factorMatrix = new Array2DRowRealMatrix(N.multiply(M).getData());
+                /*normalizeRows(factorMatrix.getDataRef());
+
+                double[][] reducedCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
+                factorMatrix = new Array2DRowRealMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));*/
+            } else {
+                RealMatrix correlationMatrix = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
+                correlationMatrix.setSubMatrix(firstCurveCorrelationMatrix, 0, 0);
+                correlationMatrix.setSubMatrix(secondCurveCorrelationMatrix, dimension, dimension);
+                correlationMatrix.setSubMatrix(curvesCorrelationMatrix, 0, dimension);
+                correlationMatrix.setSubMatrix(new Array2DRowRealMatrix(curvesCorrelationMatrix).transpose().getData(), dimension, 0);
+
+                factorMatrix = new Array2DRowRealMatrix(factorReduction(correlationMatrix.getData(), numberOfFactors));
+            }
+        }
+        return factorMatrix;
+    }
+
+    private static void fixSymmetry(double[][] matrix) {
+        for (int i = 0; i < matrix.length; i++) {
+            for (int j = 0; j < matrix.length; j++) {
+                matrix[i][j] = matrix[j][i] = 0.5 * (matrix[j][i] + matrix[i][j]);
+            }
+        }
+    }
 }

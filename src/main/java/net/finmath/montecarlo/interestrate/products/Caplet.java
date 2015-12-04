@@ -6,6 +6,10 @@
 package net.finmath.montecarlo.interestrate.products;
 
 import net.finmath.exception.CalculationException;
+import net.finmath.functions.AnalyticFormulas;
+import net.finmath.marketdata.model.AnalyticModelInterface;
+import net.finmath.marketdata.model.curves.DiscountCurveInterface;
+import net.finmath.marketdata.model.curves.ForwardCurveInterface;
 import net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulationInterface;
 import net.finmath.stochastic.RandomVariableInterface;
 
@@ -16,6 +20,12 @@ import net.finmath.stochastic.RandomVariableInterface;
  * @version 1.0
  */
 public class Caplet extends AbstractLIBORMonteCarloProduct {
+    public enum ValueUnit {
+        /** Returns the value of the caplet **/
+        VALUE,
+        /** Returns the Black-Scholes implied volatility, i.e., <i>&sigma;</i> **/
+        VOLATILITY
+    }
 
 	private final double	maturity;
 	private final double	periodLength;
@@ -95,4 +105,20 @@ public class Caplet extends AbstractLIBORMonteCarloProduct {
 
 		return values;
 	}
+
+    public double getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
+        RandomVariableInterface value = getValue(evaluationTime, model);
+        if (valueUnit == ValueUnit.VALUE) {
+            return value.getAverage();
+        } else {
+            ForwardCurveInterface forwardCurve = model.getModel().getForwardRateCurve();
+            DiscountCurveInterface discountCurve = model.getModel().getDiscountCurve();
+            AnalyticModelInterface analyticModel = model.getModel().getAnalyticModel();
+
+            double forward = forwardCurve.getForward(analyticModel, maturity);
+            double discount = periodLength * discountCurve.getDiscountFactor(maturity + periodLength);
+
+            return AnalyticFormulas.blackScholesOptionImpliedVolatility(forward, maturity, strike, discount, value.getAverage());
+        }
+    }
 }

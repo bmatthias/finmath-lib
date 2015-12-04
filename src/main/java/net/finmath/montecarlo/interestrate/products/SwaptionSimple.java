@@ -7,6 +7,8 @@ package net.finmath.montecarlo.interestrate.products;
 
 import net.finmath.exception.CalculationException;
 import net.finmath.functions.AnalyticFormulas;
+import net.finmath.marketdata.model.curves.DiscountCurveFromForwardCurve;
+import net.finmath.marketdata.model.curves.DiscountCurveInterface;
 import net.finmath.marketdata.model.curves.ForwardCurveInterface;
 import net.finmath.marketdata.products.Swap;
 import net.finmath.marketdata.products.SwapAnnuity;
@@ -33,7 +35,7 @@ public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
     private final TimeDiscretizationInterface	tenor;
     private final double						swaprate;
     private final Swaption					swaption;
-    private final ValueUnit					valueUnit;
+    private ValueUnit					valueUnit;
 
     /**
      * Note: It is implicitly assumed that swapTenor[0] is the exercise date (no forward starting).
@@ -57,6 +59,15 @@ public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
         this.swaption	= new Swaption(swapTenor[0], tenor, swaprate);
         this.valueUnit	= valueUnit;
     }
+
+    //TODO: Not very elegant. Maybe make valueUnit a parameter instead of a member.
+    public RandomVariableInterface getValue(LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
+        ValueUnit oldValueUnit = this.valueUnit;
+        this.valueUnit = valueUnit;
+        RandomVariableInterface value = getValue(0.0, model);
+        this.valueUnit = oldValueUnit;
+        return value;
+    }
     
     /**
      * This method returns the value random variable of the product within the specified model, evaluated at a given evalutationTime.
@@ -75,9 +86,10 @@ public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
     	if(valueUnit == ValueUnit.VALUE) return value;
 
     	ForwardCurveInterface forwardCurve	= model.getModel().getForwardRateCurve();
-    	ForwardCurveInterface discountCurve	= forwardCurve;
+    	DiscountCurveInterface discountCurve	= model.getModel().getDiscountCurve();
+        if(discountCurve == null) discountCurve = new DiscountCurveFromForwardCurve(forwardCurve);
 
-    	double parSwaprate = Swap.getForwardSwapRate(tenor, tenor, forwardCurve);
+    	double parSwaprate = Swap.getForwardSwapRate(tenor, tenor, forwardCurve, discountCurve);
     	double optionMaturity = tenor.getTime(0);
     	double strikeSwaprate = swaprate;
     	double swapAnnuity = SwapAnnuity.getSwapAnnuity(tenor, discountCurve);

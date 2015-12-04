@@ -18,8 +18,6 @@ public class LIBORVolatilityModelTwoParameterExponentialForm extends LIBORVolati
     private double a;
     private double b;
 
-    private boolean isCalibrateable = false;
-
     /**
      * Creates the volatility model &sigma;<sub>i</sub>(t<sub>j</sub>) = a * exp(-b (T<sub>i</sub>-t<sub>j</sub>))
      * 
@@ -29,7 +27,7 @@ public class LIBORVolatilityModelTwoParameterExponentialForm extends LIBORVolati
      * @param b The parameter b: exponential decay of the volatility.
      */
     public LIBORVolatilityModelTwoParameterExponentialForm(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, double a, double b) {
-    	this(timeDiscretization, liborPeriodDiscretization, a, b, true);
+    	this(timeDiscretization, liborPeriodDiscretization, a, b, false);
     }
 
     /**
@@ -42,16 +40,13 @@ public class LIBORVolatilityModelTwoParameterExponentialForm extends LIBORVolati
      * @param isCalibrateable Set this to true, if the parameters are available for calibration.
      */
     public LIBORVolatilityModelTwoParameterExponentialForm(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, double a, double b, boolean isCalibrateable) {
-        super(timeDiscretization, liborPeriodDiscretization);
+        super(timeDiscretization, liborPeriodDiscretization, isCalibrateable);
         this.a = a;
         this.b = b;
-        this.isCalibrateable = isCalibrateable;
     }
     
 	@Override
 	public double[] getParameter() {
-		if(!isCalibrateable) return null;
-
 		double[] parameter = new double[2];
 		parameter[0] = a;
 		parameter[1] = b;
@@ -61,7 +56,7 @@ public class LIBORVolatilityModelTwoParameterExponentialForm extends LIBORVolati
 
 	@Override
 	public void setParameter(double[] parameter) {
-		if(!isCalibrateable) return;
+        if(!isCalibrateable) return;
 
 		this.a = parameter[0];
         this.b = parameter[1];

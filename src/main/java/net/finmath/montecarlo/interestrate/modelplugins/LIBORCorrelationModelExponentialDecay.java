@@ -26,7 +26,6 @@ public class LIBORCorrelationModelExponentialDecay extends LIBORCorrelationModel
 	
 	private final	int			numberOfFactors;
 	private 		double		a;
-	private final	boolean		isCalibrateable;
 
 	private double[][]	correlationMatrix;
 	private double[][]	factorMatrix;
@@ -42,28 +41,26 @@ public class LIBORCorrelationModelExponentialDecay extends LIBORCorrelationModel
 	 * @param isCalibrateable If true, the parameter will become a free parameter in a calibration.
 	 */
 	public LIBORCorrelationModelExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double a, boolean isCalibrateable) {
-		super(timeDiscretization, liborPeriodDiscretization);
+		super(timeDiscretization, liborPeriodDiscretization, isCalibrateable);
 
 		this.numberOfFactors	= numberOfFactors;
 		this.a					= a;
-		this.isCalibrateable	= isCalibrateable;
 
 		initialize(numberOfFactors, a);
 	}
 
 	public LIBORCorrelationModelExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double a) {
-		super(timeDiscretization, liborPeriodDiscretization);
+		super(timeDiscretization, liborPeriodDiscretization, false);
 
 		this.numberOfFactors	= numberOfFactors;
 		this.a					= a;
-		this.isCalibrateable	= false;
 
 		initialize(numberOfFactors, a);
 	}
 
 	@Override
 	public void setParameter(double[] parameter) {
-		if(!isCalibrateable) return;
+        if(!isCalibrateable) return;
 
 		a = Math.max(parameter[0], 0.0);
 
@@ -76,7 +73,7 @@ public class LIBORCorrelationModelExponentialDecay extends LIBORCorrelationModel
 	}
 	
 	@Override
-    public double	getFactorLoading(int timeIndex, int factor, int component) {
+    public double getFactorLoading(int timeIndex, int factor, int component) {
 		return factorMatrix[component][factor];
 	}
 
@@ -122,8 +119,6 @@ public class LIBORCorrelationModelExponentialDecay extends LIBORCorrelationModel
 
 	@Override
 	public double[] getParameter() {
-		if(!isCalibrateable) return null;
-
 		double[] parameter = new double[1];
 
 		parameter[0] = a;

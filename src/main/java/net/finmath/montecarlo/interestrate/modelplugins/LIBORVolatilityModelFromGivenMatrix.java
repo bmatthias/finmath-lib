@@ -5,11 +5,11 @@
  */
 package net.finmath.montecarlo.interestrate.modelplugins;
 
-import java.util.ArrayList;
-
 import net.finmath.montecarlo.RandomVariable;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.TimeDiscretizationInterface;
+
+import java.util.ArrayList;
 
 /**
  * Implements a simple volatility model using given piece-wise constant values on
@@ -38,7 +38,7 @@ public class LIBORVolatilityModelFromGivenMatrix extends LIBORVolatilityModel {
 			TimeDiscretizationInterface	timeDiscretization,
 			TimeDiscretizationInterface	liborPeriodDiscretization,
 			double[][]	volatility) {
-		super(timeDiscretization, liborPeriodDiscretization);
+		super(timeDiscretization, liborPeriodDiscretization, true);
 
 		this.volatility = volatility;
 	}
@@ -73,6 +73,8 @@ public class LIBORVolatilityModelFromGivenMatrix extends LIBORVolatilityModel {
 
 	@Override
 	public void setParameter(double[] parameter) {
+        if(!isCalibrateable) return;
+
 		this.parameter = null;		// Invalidate cache
 		int parameterIndex = 0;
 		for(int timeIndex = 0; timeIndex<getTimeDiscretization().getNumberOfTimeSteps(); timeIndex++) {
@@ -82,18 +84,17 @@ public class LIBORVolatilityModelFromGivenMatrix extends LIBORVolatilityModel {
 				}
 			}
 		}
-		return;
 	}
 
 	@Override
 	public Object clone() {
 	    // Clone the outer array.
-	    double[][] newVolatilityArray = (double[][]) volatility.clone();
+	    double[][] newVolatilityArray = volatility.clone();
 
 	    // Clone the contents of the array
 	    int rows = newVolatilityArray.length;
 	    for(int row=0;row<rows;row++){
-	    	newVolatilityArray[row] = (double[]) newVolatilityArray[row].clone();
+	    	newVolatilityArray[row] = newVolatilityArray[row].clone();
 	    }
 			 				
 		return new LIBORVolatilityModelFromGivenMatrix(

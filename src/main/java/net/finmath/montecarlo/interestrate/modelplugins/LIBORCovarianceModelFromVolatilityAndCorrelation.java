@@ -5,11 +5,11 @@
  */
 package net.finmath.montecarlo.interestrate.modelplugins;
 
-import java.util.Arrays;
-
 import net.finmath.montecarlo.RandomVariable;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.TimeDiscretizationInterface;
+
+import java.util.Arrays;
 
 /**
  * A covariance model build from a volatility model implementing
@@ -87,19 +87,18 @@ public class LIBORCovarianceModelFromVolatilityAndCorrelation extends AbstractLI
 		double[] correlationParameter	= correlationModel.getParameter();
 		
 		int parameterLength = 0;
-		parameterLength += volatilityParameter	!= null ? volatilityParameter.length : 0;
-		parameterLength += correlationParameter != null ? correlationParameter.length : 0;
+		parameterLength += volatilityModel.isCalibrateable() ? volatilityParameter.length : 0;
+		parameterLength += correlationModel.isCalibrateable() ? correlationParameter.length : 0;
 		
 		double[] parameter = new double[parameterLength];
-		
+
 		int parameterIndex = 0;
-		if(volatilityParameter != null) {
+		if(volatilityModel.isCalibrateable()) {
 			System.arraycopy(volatilityParameter, 0, parameter, parameterIndex, volatilityParameter.length);
 			parameterIndex += volatilityParameter.length;
 		}
-		if(correlationParameter != null) {
+		if(correlationModel.isCalibrateable()) {
 			System.arraycopy(correlationParameter, 0, parameter, parameterIndex, correlationParameter.length);
-			parameterIndex += correlationParameter.length;
 		}
 
 		return parameter;
@@ -111,20 +110,26 @@ public class LIBORCovarianceModelFromVolatilityAndCorrelation extends AbstractLI
 		double[] correlationParameter = correlationModel.getParameter();
 
 		int parameterIndex = 0;
-		if(volatilityParameter != null) {
+		if(volatilityModel.isCalibrateable()) {
 			double[] newVolatilityParameter = new double[volatilityParameter.length];
 			System.arraycopy(parameter, parameterIndex, newVolatilityParameter, 0, newVolatilityParameter.length);
 			parameterIndex += newVolatilityParameter.length;
 			if(!Arrays.equals(newVolatilityParameter, volatilityModel.getParameter()))
 				volatilityModel.setParameter(newVolatilityParameter);
 		}
-		if(correlationParameter != null) {
+		if(correlationModel.isCalibrateable()) {
 			double[] newCorrelationParameter = new double[correlationParameter.length];
 			System.arraycopy(parameter, parameterIndex, newCorrelationParameter, 0, newCorrelationParameter.length);
-			parameterIndex += newCorrelationParameter.length;
 			if(!Arrays.equals(newCorrelationParameter, correlationModel.getParameter()))
 				correlationModel.setParameter(newCorrelationParameter);
 		}
+
+
+        //IMPORTANT: Otherwise the optimizer may not know that the parameters have been adjusted,
+        //leading to bad calibration results!
+        if (!Arrays.equals(getParameter(), parameter)) {
+            System.arraycopy(getParameter(), 0, parameter, 0, parameter.length);
+        }
 	}
 
 	@Override

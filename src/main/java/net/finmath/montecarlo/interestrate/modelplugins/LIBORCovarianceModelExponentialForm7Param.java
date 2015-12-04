@@ -44,7 +44,9 @@ public class LIBORCovarianceModelExponentialForm7Param extends AbstractLIBORCova
 
 	@Override
 	public void setParameter(double[] parameter) {
-		if(parameter[4] < 0) parameter[4] = Math.max(parameter[4], 0.0);
+        parameter[4] = Math.max(parameter[4], 0.0);
+        parameter[5] = Math.min(Math.max(parameter[5], 0.0), 1.0);
+        parameter[6] = Math.max(parameter[6], 0.0);
 		
 		this.parameter = parameter;
 

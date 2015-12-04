@@ -21,12 +21,14 @@ import net.finmath.time.TimeDiscretizationInterface;
 public abstract class LIBORCorrelationModel {
     final TimeDiscretizationInterface	timeDiscretization;
     final TimeDiscretizationInterface	liborPeriodDiscretization;
+    final boolean isCalibrateable;
 	
-	public LIBORCorrelationModel(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization) {
+	public LIBORCorrelationModel(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, boolean isCalibrateable) {
 		super();
 		this.timeDiscretization = timeDiscretization;
 		this.liborPeriodDiscretization = liborPeriodDiscretization;
-	}
+        this.isCalibrateable = isCalibrateable;
+    }
 
     public abstract double[]	getParameter();
     public abstract void		setParameter(double[] parameter);
@@ -51,4 +53,8 @@ public abstract class LIBORCorrelationModel {
 
 	@Override
     public abstract Object clone();
+
+    public boolean isCalibrateable() {
+        return isCalibrateable;
+    }
 }

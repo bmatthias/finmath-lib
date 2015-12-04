@@ -156,26 +156,6 @@ public class LIBORMarketModel extends AbstractModel implements LIBORMarketModelI
 	private double[][][]	integratedLIBORCovariance;
 	private final Object	integratedLIBORCovarianceLazyInitLock = new Object();
 
-	public static class CalibrationItem {
-		public final AbstractLIBORMonteCarloProduct		calibrationProduct;
-		public final double								calibrationTargetValue;
-		public final double								calibrationWeight;
-
-		public CalibrationItem(AbstractLIBORMonteCarloProduct calibrationProduct, double calibrationTargetValue, double calibrationWeight) {
-			super();
-			this.calibrationProduct		= calibrationProduct;
-			this.calibrationTargetValue	= calibrationTargetValue;
-			this.calibrationWeight		= calibrationWeight;
-		}
-
-		@Override
-		public String toString() {
-			return "CalibrationItem [calibrationProduct=" + calibrationProduct
-					+ ", calibrationTargetValue=" + calibrationTargetValue
-					+ ", calibrationWeight=" + calibrationWeight + "]";
-		}
-	}
-
 	/**
 	 * Creates a LIBOR Market Model for given covariance.
 	 * <br>
@@ -250,8 +230,8 @@ public class LIBORMarketModel extends AbstractModel implements LIBORMarketModelI
 			) throws CalculationException {
 
 		// Set some properties
-		if(properties != null && properties.containsKey("measure"))					measure		= Measure.valueOf(((String)properties.get("measure")).toUpperCase());
-		if(properties != null && properties.containsKey("stateSpace"))				stateSpace	= StateSpace.valueOf(((String)properties.get("stateSpace")).toUpperCase());
+		if(properties != null && properties.containsKey("measure"))					measure		= Measure.valueOf((properties.get("measure").toString()).toUpperCase());
+		if(properties != null && properties.containsKey("stateSpace"))				stateSpace	= StateSpace.valueOf((properties.get("stateSpace").toString()).toUpperCase());
 		if(properties != null && properties.containsKey("liborCap"))				liborCap	= (Double)properties.get("liborCap");
 
 		Map<String,Object> calibrationParameters = null;
@@ -945,6 +925,9 @@ public class LIBORMarketModel extends AbstractModel implements LIBORMarketModelI
 		if(dataModified.containsKey("swaptionMarketData")) {
 			swaptionMarketData = (AbstractSwaptionMarketData)dataModified.get("swaptionMarketData");
 		}
+        if(dataModified.containsKey("measure")) {
+            properties.put("measure", dataModified.get("measure").toString().toUpperCase());
+        }
 
 		LIBORMarketModel newModel = new LIBORMarketModel(liborPeriodDiscretization, forwardRateCurve, discountCurve, covarianceModel, swaptionMarketData, properties);
 		newModel.curveModel = analyticModel;

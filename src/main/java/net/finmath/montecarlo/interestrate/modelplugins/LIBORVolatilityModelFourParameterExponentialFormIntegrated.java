@@ -40,8 +40,6 @@ public class LIBORVolatilityModelFourParameterExponentialFormIntegrated extends 
 	private double c;
 	private double d;
 
-	private boolean isCalibrateable = false;
-
 	private transient CapletVolatilitiesParametric cap;
 
 
@@ -60,20 +58,17 @@ public class LIBORVolatilityModelFourParameterExponentialFormIntegrated extends 
 	 * @param isCalibrateable Set this to true, if the parameters are available for calibration.
 	 */
 	public LIBORVolatilityModelFourParameterExponentialFormIntegrated(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, double a, double b, double c, double d, boolean isCalibrateable) {
-		super(timeDiscretization, liborPeriodDiscretization);
+		super(timeDiscretization, liborPeriodDiscretization, isCalibrateable);
 		this.a = a;
 		this.b = b;
 		this.c = c;
 		this.d = d;
-		this.isCalibrateable = isCalibrateable;
 		cap = new CapletVolatilitiesParametric("", null, a, b, c, d);
 	}
 
 
 	@Override
 	public double[] getParameter() {
-		if(!isCalibrateable) return null;
-
 		double[] parameter = new double[4];
 		parameter[0] = a;
 		parameter[1] = b;
@@ -85,7 +80,7 @@ public class LIBORVolatilityModelFourParameterExponentialFormIntegrated extends 
 
 	@Override
 	public void setParameter(double[] parameter) {
-		if(!isCalibrateable) return;
+        if(!isCalibrateable) return;
 
 		this.a = parameter[0];
 		this.b = parameter[1];

@@ -21,21 +21,18 @@ import net.finmath.time.TimeDiscretizationInterface;
 public abstract class LIBORVolatilityModel {
     private TimeDiscretizationInterface	timeDiscretization;
     private TimeDiscretizationInterface	liborPeriodDiscretization;
-	
-    // You cannot instantiate the class empty
-    @SuppressWarnings("unused")
-	private LIBORVolatilityModel() {
-	}
+    final boolean isCalibrateable;
     
 	/**
-	 * @param timeDiscretization The vector of simulation time discretization points.
-	 * @param liborPeriodDiscretization The vector of tenor discretization points.
-	 */
-	public LIBORVolatilityModel(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization) {
-		super();
+     * @param timeDiscretization The vector of simulation time discretization points.
+     * @param liborPeriodDiscretization The vector of tenor discretization points.
+     * @param isCalibrateable
+     */
+	public LIBORVolatilityModel(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, boolean isCalibrateable) {
 		this.timeDiscretization = timeDiscretization;
 		this.liborPeriodDiscretization = liborPeriodDiscretization;
-	}
+        this.isCalibrateable = isCalibrateable;
+    }
 
     public abstract double[]	getParameter();
     public abstract void		setParameter(double[] parameter);
@@ -63,4 +60,8 @@ public abstract class LIBORVolatilityModel {
 	}
 
 	public abstract Object clone();
+
+    public boolean isCalibrateable() {
+        return isCalibrateable;
+    }
 }

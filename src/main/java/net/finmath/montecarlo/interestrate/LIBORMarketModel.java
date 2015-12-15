@@ -25,6 +25,7 @@ import net.finmath.montecarlo.interestrate.products.AbstractLIBORMonteCarloProdu
 import net.finmath.montecarlo.interestrate.products.SwaptionAnalyticApproximation;
 import net.finmath.montecarlo.interestrate.products.SwaptionSimple;
 import net.finmath.montecarlo.model.AbstractModel;
+import net.finmath.montecarlo.process.AbstractProcessInterface;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.RegularSchedule;
 import net.finmath.time.ScheduleInterface;
@@ -459,6 +460,15 @@ public class LIBORMarketModel extends AbstractModel implements LIBORMarketModelI
 			Map<String, ?>						properties
 			) throws CalculationException {
 		this(liborPeriodDiscretization, null, forwardRateCurve, discountCurve, covarianceModel, calibrationItems, properties);
+	}
+
+	/* (non-Javadoc)
+	* @see net.finmath.montecarlo.model.AbstractModelInterface#setProcess(net.finmath.montecarlo.process.AbstractProcessInterface)
+	*/
+	@Override
+	public void setProcess(AbstractProcessInterface process) {
+		numeraires.clear(); //recalculate the numeraires if process has changed
+		super.setProcess(process);
 	}
 
 	/**

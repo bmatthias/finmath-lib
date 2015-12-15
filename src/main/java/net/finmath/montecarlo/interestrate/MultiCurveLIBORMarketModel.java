@@ -14,6 +14,7 @@ import net.finmath.montecarlo.interestrate.products.AbstractLIBORMonteCarloProdu
 import net.finmath.montecarlo.interestrate.products.SwaptionAnalyticApproximation;
 import net.finmath.montecarlo.interestrate.products.SwaptionSimple;
 import net.finmath.montecarlo.model.AbstractModel;
+import net.finmath.montecarlo.process.AbstractProcessInterface;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.RegularSchedule;
 import net.finmath.time.ScheduleInterface;
@@ -23,6 +24,7 @@ import net.finmath.time.TimeDiscretizationInterface;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMarketModelInterface {
 
@@ -41,6 +43,7 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
     private StateSpace stateSpace = StateSpace.LOGNORMAL;
     private MultiCurveModel multiCurveModel = MultiCurveModel.MULTIPLICATIVE;
 
+    private final ConcurrentHashMap<Integer, RandomVariableInterface> numeraires = new ConcurrentHashMap<>();
     private double[][][][] integratedLIBORCovariance;
     private Double[][] c;
     private double liborCap = Double.POSITIVE_INFINITY;
@@ -117,6 +120,15 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
 
     public ForwardCurveInterface getRiskFreeCurve() {
         return riskFreeCurve;
+    }
+
+    /* (non-Javadoc)
+    * @see net.finmath.montecarlo.model.AbstractModelInterface#setProcess(net.finmath.montecarlo.process.AbstractProcessInterface)
+    */
+    @Override
+    public void setProcess(AbstractProcessInterface process) {
+        numeraires.clear(); //recalculate the numeraires if process has changed
+        super.setProcess(process);
     }
 
     @Override
@@ -363,21 +375,24 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
 		/*
 		 * Calculation of the numeraire
 		 */
+        RandomVariableInterface numeraire = numeraires.get(timeIndex);//.get();
+        if(numeraire == null) {
+            // Initialize to 1.0
+            numeraire = getProcess().getBrownianMotion().getRandomVariableForConstant(1.0);
 
-        // Initialize to 1.0
-        RandomVariableInterface numeraire = getProcess().getBrownianMotion().getRandomVariableForConstant(1.0);
+            // The product
+            for(int liborIndex = firstLiborIndex; liborIndex <= lastLiborIndex; liborIndex++) {
+                RandomVariableInterface forward = getForward(getTimeIndex(Math.min(time, liborPeriodDiscretization.getTime(liborIndex))), liborIndex);
 
-        // The product
-        for(int liborIndex = firstLiborIndex; liborIndex <= lastLiborIndex; liborIndex++) {
-            RandomVariableInterface forward = getForward(getTimeIndex(Math.min(time, liborPeriodDiscretization.getTime(liborIndex))), liborIndex);
+                double periodLength = liborPeriodDiscretization.getTimeStep(liborIndex);
 
-            double periodLength = liborPeriodDiscretization.getTimeStep(liborIndex);
-
-            if(measure == Measure.SPOT) {
-                numeraire = numeraire.accrue(forward, periodLength);
-            } else {
-                numeraire = numeraire.discount(forward, periodLength);
+                if(measure == Measure.SPOT) {
+                    numeraire = numeraire.accrue(forward, periodLength);
+                } else {
+                    numeraire = numeraire.discount(forward, periodLength);
+                }
             }
+            numeraires.put(timeIndex, numeraire);
         }
 
 		/*

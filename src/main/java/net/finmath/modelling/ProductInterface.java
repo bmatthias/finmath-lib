@@ -14,6 +14,15 @@ package net.finmath.modelling;
  */
 public interface ProductInterface {
 
+	enum ValueUnit {
+		/** Returns the value of the product **/
+		VALUE,
+		/** Returns the Black-Scholes implied integrated variance, i.e., <i>&sigma;<sup>2</sup> T</i> **/
+		INTEGRATEDVARIANCE,
+		/** Returns the Black-Scholes implied volatility, i.e., <i>&sigma;</i> **/
+		VOLATILITY
+	}
+
 	/**
 	 * Return the valuation of the product using the given model.
 	 * 

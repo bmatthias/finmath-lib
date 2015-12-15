@@ -10,6 +10,7 @@ import java.util.Map;
 
 import net.finmath.functions.AnalyticFormulas;
 import net.finmath.marketdata.model.curves.ForwardCurveInterface;
+import net.finmath.modelling.ProductInterface;
 import net.finmath.montecarlo.RandomVariable;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel;
 import net.finmath.montecarlo.interestrate.LIBORMarketModelInterface;
@@ -36,12 +37,6 @@ import net.finmath.time.TimeDiscretizationInterface;
  * @author Christian Fries
  */
 public class SwaptionSingleCurveAnalyticApproximation extends AbstractLIBORMonteCarloProduct {
-
-    public enum ValueUnit {
-        VALUE,
-        INTEGRATEDVARIANCE,
-        VOLATILITY
-    }
 
     private final double      swaprate;
     private final double[]    swapTenor;       // Vector of swap tenor (period start and end dates). Start of first period is the option maturity.
@@ -79,7 +74,7 @@ public class SwaptionSingleCurveAnalyticApproximation extends AbstractLIBORMonte
 
     @Override
     public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) {
-    	return getValues(evaluationTime, model.getModel());
+    	return getValues(evaluationTime, model.getModel(), this.valueUnit);
     }
     
     /**
@@ -93,7 +88,7 @@ public class SwaptionSingleCurveAnalyticApproximation extends AbstractLIBORMonte
      * or the value using the Black formula (ValueUnit.VALUE).
      * @TODO make initial values an arg and use evaluation time.
      */
-    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model) {
+    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, ValueUnit valueUnit) {
     	if(evaluationTime > 0) throw new RuntimeException("Forward start evaluation currently not supported.");
 
         double swapStart    = swapTenor[0];

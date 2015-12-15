@@ -53,15 +53,6 @@ import net.finmath.time.TimeDiscretizationInterface;
  */
 public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduct {
 
-    public enum ValueUnit {
-        /** Returns the value of the swaption **/
-        VALUE,
-        /** Returns the Black-Scholes implied integrated variance, i.e., <i>&sigma;<sup>2</sup> T</i> **/
-        INTEGRATEDVARIANCE,
-        /** Returns the Black-Scholes implied volatility, i.e., <i>&sigma;</i> **/
-        VOLATILITY
-    }
-
     private final double      swaprate;
     private final double[]    swapTenor;       // Vector of swap tenor (period start and end dates). Start of first period is the option maturity.
     private ValueUnit   valueUnit;
@@ -104,7 +95,7 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
 
     @Override
     public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) {
-        return getValues(evaluationTime, model.getModel());
+        return getValues(evaluationTime, model.getModel(), this.valueUnit);
     }
 
     /**
@@ -119,7 +110,7 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
      * @TODO make initial values an arg and use evaluation time.
      */
     public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model) {
-        return getValues(evaluationTime, model, true);
+        return getValues(evaluationTime, model, this.valueUnit);
     }
 
     /**
@@ -133,7 +124,7 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
      * or the value using the Black formula (ValueUnit.VALUE).
      * @TODO make initial values an arg and use evaluation time.
      */
-    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, boolean useMultiCurve) {
+    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, ValueUnit valueUnit) {
         if(evaluationTime > 0) throw new RuntimeException("Forward start evaluation currently not supported.");
 
         double swapStart    = swapTenor[0];
@@ -144,7 +135,7 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
         int optionMaturityIndex = model.getCovarianceModel().getTimeDiscretization().getTimeIndex(swapStart)-1;
 
         double integratedSwapRateVariance;
-        if (model instanceof MultiCurveLIBORMarketModel && useMultiCurve) {
+        if (model instanceof MultiCurveLIBORMarketModel) {
             integratedSwapRateVariance = calculateIntegratedSwapRateVarianceMultiCurve((MultiCurveLIBORMarketModel) model, swapStartIndex, swapEndIndex, optionMaturityIndex);
         } else {
             integratedSwapRateVariance = calculateIntegratedSwapRateVarianceSingleCurve(model, swapStartIndex, swapEndIndex, optionMaturityIndex);
@@ -422,13 +413,5 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
 
     static public double[][][] getIntegratedLIBORCovariance(LIBORMarketModel model) {
         return model.getIntegratedLIBORCovariance();
-    }
-
-    public double getValue(ValueUnit valueUnit, LIBORModelMonteCarloSimulationInterface model, boolean useMultiCurve) {
-        ValueUnit oldValueUnit = this.valueUnit;
-        this.valueUnit = valueUnit;
-        double result = getValues(0.0, model.getModel(), useMultiCurve).getAverage();
-        this.valueUnit = oldValueUnit;
-        return result;
     }
 }

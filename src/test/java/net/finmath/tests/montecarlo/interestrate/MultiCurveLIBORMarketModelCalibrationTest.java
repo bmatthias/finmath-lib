@@ -8,6 +8,7 @@ package net.finmath.tests.montecarlo.interestrate;
 import net.finmath.exception.CalculationException;
 import net.finmath.marketdata.model.AnalyticModelInterface;
 import net.finmath.marketdata.model.curves.*;
+import net.finmath.modelling.ProductInterface;
 import net.finmath.montecarlo.BrownianMotion;
 import net.finmath.montecarlo.BrownianMotionInterface;
 import net.finmath.montecarlo.interestrate.*;
@@ -377,11 +378,11 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
         if (simulation == null) {
             return 0.0;
         } else if (product instanceof SwaptionAnalyticApproximation) {
-            return ((SwaptionAnalyticApproximation) product).getValue(SwaptionAnalyticApproximation.ValueUnit.valueOf(valueUnit), simulation, true);
+            return ((SwaptionAnalyticApproximation) product).getValues(0.0, simulation.getModel(), ProductInterface.ValueUnit.valueOf(valueUnit)).getAverage();
         } else if (product instanceof SwaptionSimple) {
-            return ((SwaptionSimple) product).getValue(simulation, SwaptionSimple.ValueUnit.valueOf(valueUnit)).getAverage();
+            return ((SwaptionSimple) product).getValue(0.0, simulation, ProductInterface.ValueUnit.valueOf(valueUnit)).getAverage();
         } else if (product instanceof Caplet) {
-            return ((Caplet) product).getValue(0.0, simulation, Caplet.ValueUnit.valueOf(valueUnit));
+            return ((Caplet) product).getValue(0.0, simulation, ProductInterface.ValueUnit.valueOf(valueUnit)).getAverage();
         } else {
             throw new IllegalArgumentException("Product must be a Caplet or Swaption!");
         }

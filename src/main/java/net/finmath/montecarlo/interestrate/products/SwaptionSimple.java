@@ -26,12 +26,6 @@ import net.finmath.time.TimeDiscretizationInterface;
  */
 public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
 
-	public enum ValueUnit {
-		VALUE,
-		INTEGRATEDVARIANCE,
-		VOLATILITY
-	}
-
 	private final TimeDiscretizationInterface	tenor;
 	private final double						swaprate;
 	private final Swaption					swaption;
@@ -60,15 +54,6 @@ public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
 		this.valueUnit	= valueUnit;
 	}
 
-	//TODO: Not very elegant. Maybe make valueUnit a parameter instead of a member.
-	public RandomVariableInterface getValue(LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
-		ValueUnit oldValueUnit = this.valueUnit;
-		this.valueUnit = valueUnit;
-		RandomVariableInterface value = getValue(0.0, model);
-		this.valueUnit = oldValueUnit;
-		return value;
-	}
-
 	/**
 	 * This method returns the value random variable of the product within the specified model, evaluated at a given evalutationTime.
 	 * Note: For a lattice this is often the value conditional to evalutationTime, for a Monte-Carlo simulation this is the (sum of) value discounted to evaluation time.
@@ -81,6 +66,10 @@ public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
 	 */
 	@Override
 	public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) throws CalculationException {
+		return getValue(evaluationTime, model, this.valueUnit);
+	}
+
+	public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
 		RandomVariableInterface value = swaption.getValue(evaluationTime, model);
 
 		if(valueUnit == ValueUnit.VALUE) return value;

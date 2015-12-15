@@ -58,15 +58,6 @@ import net.finmath.time.TimeDiscretizationInterface;
  */
 public class SwaptionAnalyticApproximationRebonato extends AbstractLIBORMonteCarloProduct {
 
-    public enum ValueUnit {
-    	/** Returns the value of the swaption **/
-        VALUE,
-    	/** Returns the Black-Scholes implied integrated variance, i.e., <i>&sigma;<sup>2</sup> T</i> **/
-        INTEGRATEDVARIANCE,
-    	/** Returns the Black-Scholes implied volatility, i.e., <i>&sigma;</i> **/
-        VOLATILITY
-    }
-
     private final double      swaprate;
     private final double[]    swapTenor;       // Vector of swap tenor (period start and end dates). Start of first period is the option maturity.
     private final ValueUnit   valueUnit;
@@ -103,7 +94,7 @@ public class SwaptionAnalyticApproximationRebonato extends AbstractLIBORMonteCar
 
     @Override
     public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) {
-    	return getValues(evaluationTime, model.getModel());
+    	return getValues(evaluationTime, model.getModel(), this.valueUnit);
     }
     
     /**
@@ -117,7 +108,7 @@ public class SwaptionAnalyticApproximationRebonato extends AbstractLIBORMonteCar
      * or the value using the Black formula (ValueUnit.VALUE).
      * @TODO make initial values an arg and use evaluation time.
      */
-    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model) {
+    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, ValueUnit valueUnit) {
     	if(evaluationTime > 0) throw new RuntimeException("Forward start evaluation currently not supported.");
 
         double swapStart    = swapTenor[0];

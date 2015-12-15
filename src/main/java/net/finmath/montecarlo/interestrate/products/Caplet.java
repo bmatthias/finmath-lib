@@ -7,9 +7,6 @@ package net.finmath.montecarlo.interestrate.products;
 
 import net.finmath.exception.CalculationException;
 import net.finmath.functions.AnalyticFormulas;
-import net.finmath.marketdata.model.AnalyticModelInterface;
-import net.finmath.marketdata.model.curves.DiscountCurveInterface;
-import net.finmath.marketdata.model.curves.ForwardCurveInterface;
 import net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulationInterface;
 import net.finmath.montecarlo.interestrate.MultiCurveLIBORMarketModel;
 import net.finmath.stochastic.RandomVariableInterface;
@@ -21,12 +18,6 @@ import net.finmath.stochastic.RandomVariableInterface;
  * @version 1.0
  */
 public class Caplet extends AbstractLIBORMonteCarloProduct {
-    public enum ValueUnit {
-        /** Returns the value of the caplet **/
-        VALUE,
-        /** Returns the Black-Scholes implied volatility, i.e., <i>&sigma;</i> **/
-        VOLATILITY
-    }
 
 	private final double	maturity;
 	private final double	periodLength;
@@ -105,8 +96,12 @@ public class Caplet extends AbstractLIBORMonteCarloProduct {
 	 * @return The random variable representing the value of the product discounted to evaluation time
 	 * @throws net.finmath.exception.CalculationException Thrown if the valuation fails, specific cause may be available via the <code>cause()</code> method.
 	 */
-	@Override
-	public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) throws CalculationException {        
+    @Override
+    public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) throws CalculationException {
+        return getValue(evaluationTime, model, this.valueUnit);
+    }
+
+	public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
 		// This is on the LIBOR discretization
 		double	paymentDate	= maturity+periodLength;
 				
@@ -153,20 +148,4 @@ public class Caplet extends AbstractLIBORMonteCarloProduct {
 			throw new IllegalArgumentException("Value unit " + valueUnit + " unsupported.");
 		}
 	}
-
-    public double getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
-        RandomVariableInterface value = getValue(evaluationTime, model);
-        if (valueUnit == ValueUnit.VALUE) {
-            return value.getAverage();
-        } else {
-            ForwardCurveInterface forwardCurve = model.getModel().getForwardRateCurve();
-            DiscountCurveInterface discountCurve = model.getModel().getDiscountCurve();
-            AnalyticModelInterface analyticModel = model.getModel().getAnalyticModel();
-
-            double forward = forwardCurve.getForward(analyticModel, maturity);
-            double discount = periodLength * discountCurve.getDiscountFactor(maturity + periodLength);
-
-            return AnalyticFormulas.blackScholesOptionImpliedVolatility(forward, maturity, strike, discount, value.getAverage());
-        }
-    }
 }

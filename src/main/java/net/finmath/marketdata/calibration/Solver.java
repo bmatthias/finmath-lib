@@ -12,7 +12,9 @@ import java.util.Vector;
 
 import net.finmath.marketdata.model.AnalyticModelInterface;
 import net.finmath.marketdata.products.AnalyticProductInterface;
-import net.finmath.optimizer.LevenbergMarquardt;
+import net.finmath.optimizer.OptimizerFactoryInterface;
+import net.finmath.optimizer.OptimizerFactoryLevenbergMarquardt;
+import net.finmath.optimizer.OptimizerInterface;
 import net.finmath.optimizer.SolverException;
 
 /**
@@ -36,11 +38,35 @@ public class Solver {
 	private final double							calibrationAccuracy;
 	private final ParameterTransformation			parameterTransformation;
 
+	private OptimizerFactoryInterface			optimizerFactory;
+	
 	private	final	double	evaluationTime;
 	private final	int		maxIterations	= 1000;
 
 	private 		int		iterations		= 0;
 	private 		double	accuracy		= Double.POSITIVE_INFINITY;
+
+	/**
+	 * Generate a solver for the given parameter objects (independents) and
+	 * objective functions (dependents).
+	 * 
+	 * @param model The model from which a calibrated clone should be created.
+	 * @param calibrationProducts The objective functions.
+	 * @param calibrationTargetValues Array of target values for the objective functions.
+	 * @param parameterTransformation A parameter transformation, if any, otherwise null.
+	 * @param evaluationTime Evaluation time applied to the calibration products.
+	 * @param optimizerFactory A factory providing the optimizer (for the given objective function)
+	 */
+	public Solver(AnalyticModelInterface model, Vector<AnalyticProductInterface> calibrationProducts, List<Double> calibrationTargetValues, ParameterTransformation parameterTransformation, double evaluationTime, OptimizerFactoryInterface optimizerFactory) {
+		super();
+		this.model = model;
+		this.calibrationProducts = calibrationProducts;
+		this.calibrationTargetValues = calibrationTargetValues;
+		this.parameterTransformation = parameterTransformation;
+		this.evaluationTime = evaluationTime;
+		this.optimizerFactory = optimizerFactory;
+		this.calibrationAccuracy = 0.0;
+	}
 
 	/**
 	 * Generate a solver for the given parameter objects (independents) and
@@ -61,6 +87,7 @@ public class Solver {
 		this.parameterTransformation = parameterTransformation;
 		this.evaluationTime = evaluationTime;
 		this.calibrationAccuracy = calibrationAccuracy;
+		this.optimizerFactory = null;
 	}
 
 	/**
@@ -118,27 +145,30 @@ public class Solver {
 		final ParameterAggregation<ParameterObjectInterface> parameterAggregate = new ParameterAggregation<ParameterObjectInterface>(objectsToCalibrate);
 
 		// Set solver parameters
-		double[] initialParameters	= parameterAggregate.getParameter();
-		double[] zeros				= new double[calibrationProducts.size()];
-		java.util.Arrays.fill(zeros, 0.0);
-
-		int maxThreads		= Math.min(2 * Math.max(Runtime.getRuntime().availableProcessors(), 1), initialParameters.length);
+		final double[] initialParameters;
 
 		// Apply parameter transformation to solver parameter space
-		if(parameterTransformation != null) initialParameters = parameterTransformation.getSolverParameter(initialParameters);
+		if(parameterTransformation != null) initialParameters = parameterTransformation.getSolverParameter(parameterAggregate.getParameter());
+		else								initialParameters = parameterAggregate.getParameter();
 
-		LevenbergMarquardt optimizer = new LevenbergMarquardt(
-				initialParameters,
-				zeros, /* targetValues */
-				maxIterations,
-				maxThreads)
-		{	
-			@Override
+		final double[] zeros				= new double[calibrationProducts.size()];
+		final double[] ones					= new double[calibrationProducts.size()];
+		final double[] lowerBound			= new double[initialParameters.length];
+		final double[] upperBound			= new double[initialParameters.length];
+		java.util.Arrays.fill(zeros, 0.0);
+		java.util.Arrays.fill(ones, 1.0);
+		java.util.Arrays.fill(lowerBound, Double.NEGATIVE_INFINITY);
+		java.util.Arrays.fill(upperBound, Double.POSITIVE_INFINITY);
+		OptimizerInterface.ObjectiveFunction objectiveFunction = new OptimizerInterface.ObjectiveFunction() {
 			public void setValues(double[] parameters, double[] values) throws SolverException {
+				double[] solverParameters = parameters;
 				try {
-					if(parameterTransformation != null) parameters = parameterTransformation.getParameter(parameters);
+					if(parameterTransformation != null) {
+						solverParameters = parameterTransformation.getParameter(parameters);
+						System.arraycopy(parameterTransformation.getSolverParameter(solverParameters), 0, parameters, 0, parameters.length);
+					}
 
-					Map<ParameterObjectInterface, double[]> curvesParameterPairs = parameterAggregate.getObjectsToModifyForParameter(parameters);
+					Map<ParameterObjectInterface, double[]> curvesParameterPairs = parameterAggregate.getObjectsToModifyForParameter(solverParameters);
 					AnalyticModelInterface modelClone = model.getCloneForParameter(curvesParameterPairs);
 					for(int i=0; i<calibrationProducts.size(); i++) {
 						values[i] = calibrationProducts.get(i).getValue(evaluationTime, modelClone);
@@ -153,15 +183,22 @@ public class Solver {
 				}
 			}
 		};
-		optimizer.setErrorTolerance(calibrationAccuracy);
+
+		if(optimizerFactory == null) {
+			int maxThreads		= Math.min(2 * Math.max(Runtime.getRuntime().availableProcessors(), 1), initialParameters.length);
+			optimizerFactory = new OptimizerFactoryLevenbergMarquardt(maxIterations, calibrationAccuracy, maxThreads);
+		}
+
+		OptimizerInterface optimizer = optimizerFactory.getOptimizer(objectiveFunction, initialParameters, lowerBound, upperBound, zeros);
 		optimizer.run();
 
 		iterations = optimizer.getIterations();
 
+		double[] bestParameters = optimizer.getBestFitParameters();
+		if(parameterTransformation != null) bestParameters = parameterTransformation.getParameter(bestParameters);
+
 		AnalyticModelInterface calibratedModel = null;
 		try {
-			double[] bestParameters = optimizer.getBestFitParameters();
-			if(parameterTransformation != null) bestParameters = parameterTransformation.getParameter(bestParameters);
 
 			Map<ParameterObjectInterface, double[]> curvesParameterPairs = parameterAggregate.getObjectsToModifyForParameter(bestParameters);
 			calibratedModel = model.getCloneForParameter(curvesParameterPairs);
@@ -172,6 +209,7 @@ public class Solver {
 		accuracy = 0.0;
 		for(int i=0; i<calibrationProducts.size(); i++) {
 			double error = calibrationProducts.get(i).getValue(evaluationTime, calibratedModel);
+			if(calibrationTargetValues != null) error -= calibrationTargetValues.get(i);
 			accuracy += error * error;
 		}
 		accuracy = Math.sqrt(accuracy/calibrationProducts.size());

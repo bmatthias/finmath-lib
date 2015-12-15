@@ -1,0 +1,65 @@
+\begin{center}
+  \begin{minipage}{\linewidth}
+    \begin{tikzpicture}
+      \begin{axis}[smooth, thick,
+          width=\linewidth, % Scale the plot to \linewidth
+          height=300pt,
+          ymajorgrids={true},
+          grid style={gray!30}, % Set the style
+%          xlabel=X Axis $U$, % Set the labels
+%          ylabel=Y Axis $I$,
+%          x unit=\si{\volt}, % Set the respective units
+%          y unit=\si{\ampere},
+          legend style={at={(0.5,-0.1)},anchor=north,draw=none,legend columns=3}, % Put the legend below the plot
+          xtick align=outside,
+          xtick pos=left,
+          ytick align=outside,
+          ytick pos=left,
+          xmin = 0,
+          ymin = yMin,
+          ymax = yMax,
+          x label style={rotate=0,anchor=east} % Display labels sideways
+        ]
+        \addplot[color=s1,
+                %dotted,
+                mark=*,
+                mark options={solid},
+                smooth, line width=1.25pt] 
+        table[x expr=\coordindex,y=Vola Target (Multi-Curve),col sep=tab] {csv/fileName.csv};
+        \addplot[color=s2,
+                %dotted,
+                mark=*,
+                mark options={solid},
+                smooth, line width=1.25pt] 
+        table[x expr=\coordindex,y=Vola Analytic,col sep=tab] {csv/fileName.csv};
+        \addplot[color=s3,
+                %dotted,
+                mark=*,
+                mark options={solid},
+                smooth, line width=1.25pt]
+		table[x expr=\coordindex,y=Vola Monte-Carlo (Spot),col sep=tab] {csv/fileName.csv};
+        \addplot[color=s4,
+                %dotted,
+                mark=*,
+                mark options={solid},
+                smooth, line width=1.25pt] 
+        table[x expr=\coordindex,y=Vola Target (Single Curve),col sep=tab] {csv/fileName.csv};
+        \addplot[color=s5,
+                %dotted,
+                mark=*,
+                mark options={solid},
+                smooth, line width=1.25pt] 
+        table[x expr=\coordindex,y=Vola Analytic (Single Curve),col sep=tab] {csv/fileName.csv};
+        \addplot[color=s6,
+                %dotted,
+                mark=*,
+                mark options={solid},
+                smooth, line width=1.25pt]
+		table[x expr=\coordindex,y=Vola Monte-Carlo (Single Curve Spot),col sep=tab] {csv/fileName.csv};
+        \legend{Vola Target, Vola Analytic, Vola Monte-Carlo, Vola Target, Vola Analytic, Vola Monte-Carlo}
+      \end{axis}
+    \end{tikzpicture}
+    \captionof{figure}{Caption}
+  \end{minipage}
+\end{center}
+

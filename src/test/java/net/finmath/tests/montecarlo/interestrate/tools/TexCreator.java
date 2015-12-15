@@ -18,7 +18,7 @@ public class TexCreator {
 
         try (FileReader fileReader = new FileReader("templates/plot_template.tex");
              BufferedReader reader = new BufferedReader(fileReader);
-             Writer writer = new FileWriter(fileName + ".tex")
+             Writer writer = new FileWriter("results/" + fileName + ".tex")
         ) {
             reader.lines().forEach(
                     line -> {

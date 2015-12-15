@@ -102,7 +102,7 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
                 liborCurveName,
                 riskFreeCurveName,
                 covarianceModel,
-                getCalibrationItems(
+                LIBORMarketModelInterface.getCalibrationItems(
                         liborPeriodDiscretization,
                         curveModel.getForwardCurve(liborCurveName),
                         swaptionMarketData,
@@ -573,70 +573,5 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
         }
 
         return integratedLIBORCovariance;
-    }
-
-    private static CalibrationItem[] getCalibrationItems(TimeDiscretizationInterface liborPeriodDiscretization, ForwardCurveInterface forwardCurve, AbstractSwaptionMarketData swaptionMarketData, boolean isUseAnalyticApproximation) {
-        if(swaptionMarketData == null) return null;
-
-        TimeDiscretizationInterface optionMaturities		= swaptionMarketData.getOptionMaturities();
-        TimeDiscretizationInterface tenor					= swaptionMarketData.getTenor();
-        double						swapPeriodLength		= swaptionMarketData.getSwapPeriodLength();
-
-        ArrayList<CalibrationItem> calibrationItems = new ArrayList<CalibrationItem>();
-        for(int exerciseIndex=0; exerciseIndex<=optionMaturities.getNumberOfTimeSteps(); exerciseIndex++) {
-            for(int tenorIndex=0; tenorIndex<=tenor.getNumberOfTimeSteps()-exerciseIndex; tenorIndex++) {
-
-                // Create a swaption
-                double exerciseDate	= optionMaturities.getTime(exerciseIndex);
-                double swapLength	= tenor.getTime(tenorIndex);
-
-                if(liborPeriodDiscretization.getTimeIndex(exerciseDate) < 0) continue;
-                if(liborPeriodDiscretization.getTimeIndex(exerciseDate+swapLength) <= liborPeriodDiscretization.getTimeIndex(exerciseDate)) continue;
-
-                int numberOfPeriods = (int)(swapLength / swapPeriodLength);
-
-                double[] fixingDates      = new double[numberOfPeriods];
-                double[] paymentDates     = new double[numberOfPeriods];
-                double[] swapTenorTimes   = new double[numberOfPeriods+1];
-
-                for(int periodStartIndex=0; periodStartIndex<numberOfPeriods; periodStartIndex++) {
-                    fixingDates[periodStartIndex] = exerciseDate + periodStartIndex * swapPeriodLength;
-                    paymentDates[periodStartIndex] = exerciseDate + (periodStartIndex+1) * swapPeriodLength;
-                    swapTenorTimes[periodStartIndex] = exerciseDate + periodStartIndex * swapPeriodLength;
-                }
-                swapTenorTimes[numberOfPeriods] = exerciseDate + numberOfPeriods * swapPeriodLength;
-
-
-                // Swaptions swap rate
-                ScheduleInterface swapTenor = new RegularSchedule(new TimeDiscretization(swapTenorTimes));
-                double swaprate = Swap.getForwardSwapRate(swapTenor, swapTenor, forwardCurve, null);
-
-                // Set swap rates for each period
-                double[] swaprates        = new double[numberOfPeriods];
-                for(int periodStartIndex=0; periodStartIndex<numberOfPeriods; periodStartIndex++) {
-                    swaprates[periodStartIndex] = swaprate;
-                }
-
-                if(isUseAnalyticApproximation) {
-                    AbstractLIBORMonteCarloProduct swaption = new SwaptionAnalyticApproximation(swaprate, swapTenorTimes, SwaptionAnalyticApproximation.ValueUnit.VOLATILITY);
-                    double impliedVolatility = swaptionMarketData.getVolatility(exerciseDate, swapLength, swaptionMarketData.getSwapPeriodLength(), swaprate);
-
-                    calibrationItems.add(new CalibrationItem(swaption, impliedVolatility, 1.0));
-                }
-                else {
-                    AbstractLIBORMonteCarloProduct swaption = new SwaptionSimple(swaprate, swapTenorTimes, SwaptionSimple.ValueUnit.VALUE);
-
-                    double forwardSwaprate		= Swap.getForwardSwapRate(swapTenor, swapTenor, forwardCurve);
-                    double swapAnnuity 			= SwapAnnuity.getSwapAnnuity(swapTenor, forwardCurve);
-                    double impliedVolatility	= swaptionMarketData.getVolatility(exerciseDate, swapLength, swaptionMarketData.getSwapPeriodLength(), swaprate);
-
-                    double targetValue = AnalyticFormulas.blackModelSwaptionValue(forwardSwaprate, impliedVolatility, exerciseDate, swaprate, swapAnnuity);
-
-                    calibrationItems.add(new CalibrationItem(swaption, targetValue, 1.0));
-                }
-            }
-        }
-
-        return calibrationItems.toArray(new CalibrationItem[calibrationItems.size()]);
     }
 }

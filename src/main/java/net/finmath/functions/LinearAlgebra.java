@@ -121,6 +121,9 @@ public class LinearAlgebra {
         boolean  isUseApacheCommonsMath = false;
         boolean  isUseColt = false;
 		if(isUseApacheCommonsMath) {
+			/*
+			 * Note: Commons math has convergence problems, where Colt does not.
+			 */
             return getFactorMatrixUsingCommonsMath(correlationMatrix, numberOfFactors);
 		} else if(isUseColt) {
 			return getFactorMatrixUsingColt(new DenseDoubleMatrix2D(correlationMatrix), numberOfFactors).toArray();

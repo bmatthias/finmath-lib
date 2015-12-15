@@ -48,7 +48,7 @@ public class ProcessEulerScheme extends AbstractProcess {
 
 	private Scheme		scheme = Scheme.EULER;
 
-	// Uses locally for multi-threadded calculation.
+	// Used locally for multi-threadded calculation.
 	private ExecutorService executor;
 
 	/*
@@ -57,7 +57,22 @@ public class ProcessEulerScheme extends AbstractProcess {
 	private transient RandomVariableInterface[][]	discreteProcess = null;
 	private transient RandomVariableInterface[]		discreteProcessWeights;
 
+
 	/**
+	 * Create an Euler discretization scheme.
+	 * 
+	 * @param brownianMotion The Brownian driver of the process
+	 * @param scheme The scheme to use. See {@link Scheme}.
+	 */
+	public ProcessEulerScheme(BrownianMotionInterface brownianMotion, Scheme scheme) {
+		super(brownianMotion.getTimeDiscretization());
+		this.brownianMotion = brownianMotion;
+		this.scheme = scheme;
+	}
+
+	/**
+	 * Create an Euler discretization scheme.
+	 * 
 	 * @param brownianMotion The Brownian driver of the process
 	 */
 	public ProcessEulerScheme(BrownianMotionInterface brownianMotion) {

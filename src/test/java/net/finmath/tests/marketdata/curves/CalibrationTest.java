@@ -11,6 +11,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Vector;
 
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
+
 import net.finmath.marketdata.calibration.ParameterObjectInterface;
 import net.finmath.marketdata.calibration.Solver;
 import net.finmath.marketdata.model.AnalyticModel;
@@ -28,12 +34,6 @@ import net.finmath.marketdata.products.Swap;
 import net.finmath.optimizer.SolverException;
 import net.finmath.time.RegularSchedule;
 import net.finmath.time.TimeDiscretization;
-
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
 /**
  * This class makes some basic tests related to the setup, use and calibration of discount curves and forward curve.
@@ -108,7 +108,7 @@ public class CalibrationTest {
 		// A model is a collection of curves (curves and products find other curves by looking up their name in the model)
 		AnalyticModel model1 = new AnalyticModel(new CurveInterface[] { discountCurve , forwardCurveFromDiscountCurve });
 
-		System.out.println("Given a disocunt curve:");
+		System.out.println("Given a discount curve:");
 		System.out.println(discountCurve.toString());
 
 		// We may ask the forward curve for a forward.

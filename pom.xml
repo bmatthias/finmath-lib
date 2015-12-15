@@ -11,7 +11,7 @@
 
 	<groupId>net.finmath</groupId>
 	<artifactId>finmath-lib</artifactId>
-	<version>1.2.56-SNAPSHOT</version>
+	<version>2.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>finmath lib</name>
@@ -101,12 +101,12 @@
             <artifactId>opencsv</artifactId>
             <version>1.8</version>
         </dependency>
-        <dependency>
-            <groupId>joda-time</groupId>
-            <artifactId>joda-time</artifactId>
-            <version>2.5</version>
-        </dependency>
-    </dependencies>
+		<dependency>
+			<groupId>joda-time</groupId>
+			<artifactId>joda-time</artifactId>
+			<version>2.9.1</version>
+		</dependency>
+	</dependencies>
 
 	<build>
 		<defaultGoal>clean install javadoc:javadoc</defaultGoal>
@@ -132,7 +132,7 @@
 					</header>
 					<footer>
 			   			<![CDATA[
-						<i>Copyright &copy; 2014 Christian&nbsp;P.&nbsp;Fries.</i>
+						<i>Copyright &copy; 2015 Christian&nbsp;P.&nbsp;Fries.</i>
 			   			]]>
 					</footer>
 					<tags>
@@ -165,7 +165,7 @@
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>cobertura-maven-plugin</artifactId>
-				<version>2.6</version>
+				<version>2.7</version>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -277,7 +277,7 @@
 					</header>
 					<footer>
 			   			<![CDATA[
-						<i>Copyright &copy; 2014 Christian&nbsp;P.&nbsp;Fries.</i>
+						<i>Copyright &copy; 2015 Christian&nbsp;P.&nbsp;Fries.</i>
 			   			]]>
 					</footer>
 					<tags>

@@ -46,7 +46,7 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
     private boolean useSeperateCorrelationModels = false;
     private String tenor = "1m";
     private String productType;
-    private int numberOfSeeds = 1;
+    private int numberOfSeeds = 10;
 
     private boolean calibrateSC = true;
     private boolean calibrateMC = true;
@@ -70,9 +70,9 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
     }
 
     public static void main(String[] args) throws Exception {
-        Integer[] numberOfParams = { 15 };
+        Integer[] numberOfParams = { 17 };
         Integer[] numberOfFactors = { 10 };
-        Integer[] numberOfPaths = { 20000 };
+        Integer[] numberOfPaths = { 5000 };
         LIBORMarketModel.Measure[] measures = { Measure.SPOT };
         MultiCurveLIBORMarketModel.MultiCurveModel[] models = {
                 MultiCurveLIBORMarketModel.MultiCurveModel.ADDITIVE,
@@ -80,7 +80,7 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
                 //MultiCurveLIBORMarketModel.MultiCurveModel.MMARTINGALE
         };
         Boolean[] useAnalyticApproximation = { true };
-        Boolean[] useSeperateCorrelationModels = { true };
+        Boolean[] useSeperateCorrelationModels = { false };
         String[] tenors = new String[] { null };
         String[] swaptionTypes = new String[] { "synthCaplets" };
 
@@ -142,7 +142,7 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
         CalibrationItem[] eoniaCalibrationItemsMonteCarlo = calibrationData.getFirstCurveCalibrationItemsMonteCarlo();
         CalibrationItem[] euriborCalibrationItemsMonteCarlo = calibrationData.getSecondCurveCalibrationItemsMonteCarlo();
 
-        String baseName = "results/" + numberOfSeeds + productType + measure + numberOfFactors + multiCurveModel + numberOfPaths +
+        final String baseName = numberOfSeeds + productType + measure + numberOfFactors + multiCurveModel + numberOfPaths +
                 useAnalyticApproximation + tenor + useSeperateCorrelationModels + numberOfParams;
 
         System.out.println(baseName);
@@ -220,13 +220,14 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
         LIBORMarketModelInterface scModelTerminal = !isSpotMeasure ? scLiborMarketModelCalibrated : scLiborMarketModelCalibrated.getCloneWithModifiedData(dataModified);
         LIBORMarketModelInterface mcModelTerminal = !isSpotMeasure ? mcLiborMarketModelCalibrated : mcLiborMarketModelCalibrated.getCloneWithModifiedData(dataModified);
 
-        File outputFile = new File(baseName + ".csv");
+        File outputFile = new File("results/" + baseName + ".csv");
         String fileName = baseName;
         for (int i = 0; outputFile.exists(); i++) {
             fileName = baseName + "_" + i;
-            outputFile = new File(fileName + ".csv");
+            outputFile = new File("results/" + fileName + ".csv");
         }
 
+        outputFile.getParentFile().mkdirs();
         FileWriter writer = new FileWriter(outputFile);
         try {
             int primeNumber = 1009;
@@ -301,12 +302,12 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
             writer.flush();
             writer.close();
 
-            writer = new FileWriter(new File(fileName + "_errs.csv"));
+            writer = new FileWriter(new File("results/" + fileName + "_errs.csv"));
             CSVCreator.writeErrorStatistics(eoniaCalibrationItemsAnalytic, euriborCalibrationItemsAnalytic, writer, deviations);
             writer.flush();
             writer.close();
 
-            writer = new FileWriter(new File(fileName + "_params.csv"));
+            writer = new FileWriter(new File("results/" + fileName + "_params.csv"));
             CSVCreator.writeParamsAndDuration(scParams, duration, mcParams, writer);
         } catch (Exception e) {
             e.printStackTrace();

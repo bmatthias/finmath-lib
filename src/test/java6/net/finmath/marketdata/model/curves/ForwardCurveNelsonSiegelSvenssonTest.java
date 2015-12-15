@@ -6,8 +6,10 @@
 
 package net.finmath.marketdata.model.curves;
 
-import java.util.Calendar;
-import java.util.GregorianCalendar;
+import org.joda.time.DateTimeConstants;
+import org.joda.time.LocalDate;
+import org.junit.Assert;
+import org.junit.Test;
 
 import net.finmath.marketdata.model.AnalyticModelInterface;
 import net.finmath.time.businessdaycalendar.BusinessdayCalendarExcludingTARGETHolidays;
@@ -15,9 +17,6 @@ import net.finmath.time.businessdaycalendar.BusinessdayCalendarInterface;
 import net.finmath.time.businessdaycalendar.BusinessdayCalendarInterface.DateRollConvention;
 import net.finmath.time.daycount.DayCountConventionInterface;
 import net.finmath.time.daycount.DayCountConvention_ACT_360;
-
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
  * @author Christian Fries
@@ -30,7 +29,7 @@ public class ForwardCurveNelsonSiegelSvenssonTest {
 
 		final double[] nssParameters = new double[] { 0.02, -0.010, 0.16, -0.17, 4.50, 3.5 };
 
-		Calendar referenceDate = new GregorianCalendar(2014, 07, 16);
+		LocalDate referenceDate = new LocalDate(2014, DateTimeConstants.AUGUST, 16); 
 		String paymentOffsetCode = "3M";
 		BusinessdayCalendarInterface paymentBusinessdayCalendar = new BusinessdayCalendarExcludingTARGETHolidays();
 		BusinessdayCalendarInterface.DateRollConvention paymentDateRollConvention = DateRollConvention.MODIFIED_FOLLOWING;

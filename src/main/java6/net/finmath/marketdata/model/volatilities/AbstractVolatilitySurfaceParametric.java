@@ -6,13 +6,16 @@
 
 package net.finmath.marketdata.model.volatilities;
 
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import org.joda.time.LocalDate;
 
 import net.finmath.exception.CalculationException;
 import net.finmath.marketdata.calibration.ParameterObjectInterface;
@@ -20,14 +23,19 @@ import net.finmath.marketdata.calibration.ParameterTransformation;
 import net.finmath.marketdata.calibration.Solver;
 import net.finmath.marketdata.model.AnalyticModelInterface;
 import net.finmath.marketdata.products.AnalyticProductInterface;
+import net.finmath.optimizer.OptimizerFactoryInterface;
 import net.finmath.optimizer.SolverException;
 
 /**
+ * Base class for parametric volatility surfaces, implementing a generic calibration algorithm.
+ * 
  * @author Christian Fries
  */
 public abstract class AbstractVolatilitySurfaceParametric extends AbstractVolatilitySurface implements ParameterObjectInterface {
 
-	public AbstractVolatilitySurfaceParametric(String name, Calendar referenceDate) {
+	private static final Logger logger = Logger.getLogger("net.finmath");
+
+	public AbstractVolatilitySurfaceParametric(String name, LocalDate referenceDate) {
 		super(name, referenceDate);
 	}
 
@@ -41,43 +49,52 @@ public abstract class AbstractVolatilitySurfaceParametric extends AbstractVolati
 	public abstract AbstractVolatilitySurfaceParametric getCloneForParameter(double[] value) throws CloneNotSupportedException;
 
 	public AbstractVolatilitySurfaceParametric getCloneCalibrated(final AnalyticModelInterface calibrationModel, final Vector<AnalyticProductInterface> calibrationProducts, final List<Double> calibrationTargetValues, Map<String,Object> calibrationParameters) throws CalculationException, SolverException {
+		return getCloneCalibrated(calibrationModel, calibrationProducts, calibrationTargetValues, calibrationParameters, null);
+	}
+
+	public AbstractVolatilitySurfaceParametric getCloneCalibrated(final AnalyticModelInterface calibrationModel, final Vector<AnalyticProductInterface> calibrationProducts, final List<Double> calibrationTargetValues, Map<String,Object> calibrationParameters, final ParameterTransformation parameterTransformation) throws CalculationException, SolverException {
+		return getCloneCalibrated(calibrationModel, calibrationProducts, calibrationTargetValues, calibrationParameters, parameterTransformation, null);
+	}
+
+	/**
+	 * Create a clone of this volatility surface using a generic calibration
+	 * of its parameters to given market data.
+	 * 
+	 * @param calibrationModel The model used during calibration (contains additional objects required during valuation, e.g. curves).
+	 * @param calibrationProducts The calibration products.
+	 * @param calibrationTargetValues The target values of the calibration products.
+	 * @param calibrationParameters A map containing additional settings like "evaluationTime" (Double).
+	 * @param parameterTransformation An optional parameter transformation.
+	 * @param optimizerFactory The factory providing the optimizer to be used during calibration.
+	 * @return An object having the same type as this one, using (hopefully) calibrated parameters.
+	 * @throws CalculationException Exception thrown when evaluation fails.
+	 * @throws SolverException Exception thrown when solver fails.
+	 */
+	public AbstractVolatilitySurfaceParametric getCloneCalibrated(final AnalyticModelInterface calibrationModel, final Vector<AnalyticProductInterface> calibrationProducts, final List<Double> calibrationTargetValues, Map<String,Object> calibrationParameters, final ParameterTransformation parameterTransformation, OptimizerFactoryInterface optimizerFactory) throws CalculationException, SolverException {
 		if(calibrationParameters == null) calibrationParameters = new HashMap<String,Object>();
 		Integer maxIterationsParameter	= (Integer)calibrationParameters.get("maxIterations");
 		Double	accuracyParameter		= (Double)calibrationParameters.get("accuracy");
 		Double	evaluationTimeParameter		= (Double)calibrationParameters.get("evaluationTime");
 
-		// @TODO: These constants should become parameters. The numberOfPaths and seed is only relevant if Monte-Carlo products are used for calibration.
-		int maxIterations	= maxIterationsParameter != null ? maxIterationsParameter.intValue() : 400;
-		double accuracy		= accuracyParameter != null ? accuracyParameter.doubleValue() : 1E-8;
-		double evaluationTime		= evaluationTimeParameter != null ? evaluationTimeParameter.doubleValue() : 0.0;
+		// @TODO currently ignored, we use the setting form the OptimizerFactoryInterface
+		int maxIterations		= maxIterationsParameter != null ? maxIterationsParameter.intValue() : 600;
+		double accuracy			= accuracyParameter != null ? accuracyParameter.doubleValue() : 1E-8;
+		double evaluationTime	= evaluationTimeParameter != null ? evaluationTimeParameter.doubleValue() : 0.0;
 
 		AnalyticModelInterface model = calibrationModel.addVolatilitySurfaces(this);
-		
-		
-		// @TODO We constrain the parameters to positive values - this is experimental and will bekome a parameter
-		ParameterTransformation parameterTransformation = new ParameterTransformation() {
-			@Override
-			public double[] getSolverParameter(final double[] parameter) {
-				double[] newParameter = parameter.clone(); 
-				for(int i=0; i<parameter.length; i++) newParameter[i] = Math.log(parameter[i]);
-				return newParameter;
-			}
-			
-			@Override
-			public double[] getParameter(final double[] solverParameter) {
-				double[] newSolverParameter = solverParameter.clone(); 
-				for(int i=0; i<solverParameter.length; i++) newSolverParameter[i] = Math.exp(solverParameter[i]);
-				return newSolverParameter;
-			}
-		};
-		Solver solver = new Solver(model, calibrationProducts, calibrationTargetValues, parameterTransformation, evaluationTime, accuracy);
+		Solver solver = new Solver(model, calibrationProducts, calibrationTargetValues, parameterTransformation, evaluationTime, optimizerFactory);
 
 		Set<ParameterObjectInterface> objectsToCalibrate = new HashSet<ParameterObjectInterface>();
 		objectsToCalibrate.add(this);
 		AnalyticModelInterface modelCalibrated = solver.getCalibratedModel(objectsToCalibrate);
 
-		double lastAccuracy		= solver.getAccuracy();
-		double lastIterations	= solver.getIterations();
+		// Diagnostic output
+		if (logger.isLoggable(Level.FINE)) {
+			double lastAccuracy		= solver.getAccuracy();
+			int 	lastIterations	= solver.getIterations();
+
+			logger.fine("The solver achived an accuracy of " + lastAccuracy + " in " + lastIterations + ".");
+		}
 
 		return (AbstractVolatilitySurfaceParametric)modelCalibrated.getVolatilitySurface(this.getName());
 	}

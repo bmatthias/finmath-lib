@@ -11,13 +11,14 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.finmath.optimizer.LevenbergMarquardt;
-import net.finmath.optimizer.SolverException;
-import net.finmath.timeseries.HistoricalSimulationModel;
-
 import org.apache.commons.math3.analysis.MultivariateFunction;
 import org.apache.commons.math3.optimization.GoalType;
 import org.apache.commons.math3.optimization.PointValuePair;
+
+import net.finmath.optimizer.LevenbergMarquardt;
+import net.finmath.optimizer.OptimizerInterface;
+import net.finmath.optimizer.SolverException;
+import net.finmath.timeseries.HistoricalSimulationModel;
 
 /**
  * Log-normal process with GARCH(1,1) volatility.
@@ -26,7 +27,10 @@ import org.apache.commons.math3.optimization.PointValuePair;
  * \[
  *   \mathrm{d} \log(X) = \sigma(t) \mathrm{d}W(t)
  * \]
- * where \( \sigma \) is given by a GARCH(1,1) process.
+ * where \( \sigma \) is given by a GARCH(1,1) process from time discrete
+ * realizations \( X_{i} \). That is, given a time series of values \( X_{i} \)
+ * the GARCH(1,1) volatility of the log-returns \( \log(X_{i+1}/X_{i}) \) is
+ * estimated.
  * 
  * @author Christian Fries
  */
@@ -224,7 +228,7 @@ public class GARCH implements HistoricalSimulationModel {
 		guessParameters[2] = -Math.log(-Math.log(guessMuema));
 
 		// Seek optimal parameter configuration
-		LevenbergMarquardt lm = new LevenbergMarquardt(guessParameters, new double[] { 1000.0 }, maxIterations, 2) {
+		OptimizerInterface lm = new LevenbergMarquardt(guessParameters, new double[] { 1000.0 }, maxIterations, 2) {
 			
 			@Override
 			public void setValues(double[] arg0, double[] arg1) throws SolverException {

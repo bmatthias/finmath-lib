@@ -12,8 +12,12 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import org.junit.Assert;
+import org.junit.Test;
+
 import net.finmath.exception.CalculationException;
 import net.finmath.marketdata.model.curves.DiscountCurve;
+import net.finmath.marketdata.model.curves.DiscountCurveFromForwardCurve;
 import net.finmath.marketdata.model.curves.DiscountCurveInterface;
 import net.finmath.marketdata.model.curves.ForwardCurve;
 import net.finmath.marketdata.model.curves.ForwardCurveInterface;
@@ -26,9 +30,6 @@ import net.finmath.montecarlo.interestrate.modelplugins.LIBORCovarianceModelFrom
 import net.finmath.montecarlo.interestrate.modelplugins.LIBORVolatilityModelFromGivenMatrix;
 import net.finmath.montecarlo.process.ProcessEulerScheme;
 import net.finmath.time.TimeDiscretization;
-
-import org.junit.Assert;
-import org.junit.Test;
 
 /**
  * @author Christian Fries
@@ -49,7 +50,7 @@ public class SwaptionAnalyticApproximationTest {
 		System.out.println("Runnning tests with a single curve LIBOR Market Model");
 
 		LIBORModelMonteCarloSimulationInterface liborMarketModel = createSingleCurveLIBORMarketModel(numberOfPaths, numberOfFactors, correlationDecayParam);
-		
+
 		testModel(liborMarketModel, false);
 	}
 
@@ -110,7 +111,7 @@ public class SwaptionAnalyticApproximationTest {
 			SwaptionSingleCurveAnalyticApproximation swaptionAnalyitcSingleCurve = new SwaptionSingleCurveAnalyticApproximation(swaprate, swapTenor, SwaptionSingleCurveAnalyticApproximation.ValueUnit.VALUE);
 			double valueAnalyticSingleCurve = swaptionAnalyitcSingleCurve.getValue(liborMarketModel);
 			System.out.print(formatterValue.format(valueAnalyticSingleCurve) + "         ");
-			
+
 			// Value analytic
 			SwaptionAnalyticApproximation swaptionAnalyitc = new SwaptionAnalyticApproximation(swaprate, swapTenor, SwaptionAnalyticApproximation.ValueUnit.VALUE);
 			double valueAnalytic = swaptionAnalyitc.getValue(liborMarketModel);
@@ -132,14 +133,14 @@ public class SwaptionAnalyticApproximationTest {
 		/*
 		 * jUnit assertion: condition under which we consider this test successful
 		 */
-		Assert.assertEquals("Deviation", 0.0, maxAbsDeviationSimulation, 5E-3);
+		Assert.assertEquals("Deviation", 0.0, maxAbsDeviationSimulation, 5E-4);
 		Assert.assertTrue(isMultiCurve || Math.abs(maxAbsDeviationAnalytic) < 1E-15);
 	}
 
 	public static LIBORModelMonteCarloSimulationInterface createSingleCurveLIBORMarketModel(int numberOfPaths, int numberOfFactors, double correlationDecayParam) throws CalculationException {
 
 		// Create the forward curve (initial value of the LIBOR market model)
-		ForwardCurve forwardCurve = ForwardCurve.createForwardCurveFromForwards(
+		ForwardCurveInterface forwardCurve = ForwardCurve.createForwardCurveFromForwards(
 				"forwardCurve"								/* name of the curve */,
 				new double[] {0.5 , 1.0 , 2.0 , 5.0 , 40.0}	/* fixings of the forward */,
 				new double[] {0.05, 0.05, 0.05, 0.05, 0.05}	/* forwards */,
@@ -147,7 +148,7 @@ public class SwaptionAnalyticApproximationTest {
 				);
 
 		// No discount curve
-		DiscountCurve discountCurve = null;
+		DiscountCurveInterface discountCurve = new DiscountCurveFromForwardCurve(forwardCurve);
 
 		return createLIBORMarketModel(numberOfPaths, numberOfFactors, correlationDecayParam, discountCurve, forwardCurve);
 	}
@@ -155,7 +156,7 @@ public class SwaptionAnalyticApproximationTest {
 	public static LIBORModelMonteCarloSimulationInterface createMultiCurveLIBORMarketModel(int numberOfPaths, int numberOfFactors, double correlationDecayParam) throws CalculationException {
 
 		// Create the forward curve (initial value of the LIBOR market model)
-		ForwardCurve forwardCurve = ForwardCurve.createForwardCurveFromForwards(
+		ForwardCurveInterface forwardCurve = ForwardCurve.createForwardCurveFromForwards(
 				"forwardCurve"								/* name of the curve */,
 				new double[] {0.5 , 1.0 , 2.0 , 5.0 , 40.0}	/* fixings of the forward */,
 				new double[] {0.05, 0.05, 0.05, 0.05, 0.05}	/* forwards */,
@@ -163,7 +164,7 @@ public class SwaptionAnalyticApproximationTest {
 				);
 
 		// Create the discount curve
-		DiscountCurve discountCurve = DiscountCurve.createDiscountCurveFromZeroRates(
+		DiscountCurveInterface discountCurve = DiscountCurve.createDiscountCurveFromZeroRates(
 				"discountCurve"								/* name of the curve */,
 				new double[] {0.5 , 1.0 , 2.0 , 5.0 , 40.0}	/* maturities */,
 				new double[] {0.04, 0.04, 0.04, 0.04, 0.05}	/* zero rates */
@@ -181,7 +182,7 @@ public class SwaptionAnalyticApproximationTest {
 		double liborPeriodLength	= 0.5;
 		double liborRateTimeHorzion	= 20.0;
 		TimeDiscretization liborPeriodDiscretization = new TimeDiscretization(0.0, (int) (liborRateTimeHorzion / liborPeriodLength), liborPeriodLength);		
-		
+
 		/*
 		 * Create a simulation time discretization
 		 */
@@ -236,7 +237,7 @@ public class SwaptionAnalyticApproximationTest {
 
 		// Choose the simulation measure
 		properties.put("measure", LIBORMarketModel.Measure.SPOT.name());
-		
+
 		// Choose log normal model
 		properties.put("stateSpace", LIBORMarketModel.StateSpace.LOGNORMAL.name());
 

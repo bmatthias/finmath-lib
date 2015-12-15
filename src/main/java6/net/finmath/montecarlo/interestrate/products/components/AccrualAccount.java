@@ -54,19 +54,19 @@ public class AccrualAccount extends AbstractProductComponent {
 	@Override
 	public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model) throws CalculationException {
 		if(evaluationTime <= 0) return pastFixings.getValue(evaluationTime, model);
-		
+
 		RandomVariableInterface value = pastFixings.getValue(0.0, model);
-		
+
 		// Loop over accrual periods
 		for(double time=0.0; time<evaluationTime; time += accrualPeriod) {	
 			// Get the forward fixed at the beginning of the period
 			RandomVariableInterface	forwardRate				= accrualIndex.getValue(time, model);
 			double					currentAccrualPeriod	= Math.min(accrualPeriod , evaluationTime-time);
-			
+
 			// Accrue the value using the current forward rate
 			value = value.accrue(forwardRate, currentAccrualPeriod);
 		}
-		
+
 		return value;
 	}
 }

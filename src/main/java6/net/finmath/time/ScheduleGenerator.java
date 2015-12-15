@@ -7,9 +7,9 @@
 package net.finmath.time;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
-import java.util.GregorianCalendar;
+
+import org.joda.time.LocalDate;
 
 import net.finmath.time.businessdaycalendar.BusinessdayCalendar;
 import net.finmath.time.businessdaycalendar.BusinessdayCalendarAny;
@@ -139,9 +139,9 @@ public class ScheduleGenerator {
 	 * @return The corresponding schedule
 	 */
 	public static ScheduleInterface createScheduleFromConventions(
-			Calendar referenceDate,
-			Calendar startDate,
-			Calendar maturity,
+			LocalDate referenceDate,
+			LocalDate startDate,
+			LocalDate maturity,
 			Frequency frequency,
 			DaycountConvention daycountConvention,
 			ShortPeriodConvention shortPeriodConvention,
@@ -212,89 +212,80 @@ public class ScheduleGenerator {
 			/*
 			 * Going forward on periodStartDate, starting with startDate as periodStartDate
 			 */
-			Calendar periodStartDateUnadjusted	= (Calendar)startDate.clone();
-			Calendar periodEndDateUnadjusted	= (Calendar)startDate.clone();		
-			Calendar periodStartDate			= businessdayCalendar.getAdjustedDate(periodStartDateUnadjusted, dateRollConvention);
-			while(periodStartDateUnadjusted.before(maturity)) {
+			LocalDate periodStartDateUnadjusted	= startDate;
+			LocalDate periodEndDateUnadjusted	= startDate;		
+			LocalDate periodStartDate			= businessdayCalendar.getAdjustedDate(periodStartDateUnadjusted, dateRollConvention);
+			while(periodStartDateUnadjusted.isBefore(maturity)) {
 				// The following code only makes calculations on periodEndXxx while the periodStartXxx is only copied and used to check if we terminate
 				// Determine period end
-				periodEndDateUnadjusted.add(Calendar.DAY_OF_YEAR, periodLengthDays);
-				periodEndDateUnadjusted.add(Calendar.WEEK_OF_YEAR, periodLengthWeeks);
-				periodEndDateUnadjusted.add(Calendar.MONTH, periodLengthMonth);
-				if(periodEndDateUnadjusted.after(maturity)) {
-					periodEndDateUnadjusted = (Calendar) maturity.clone();
+				periodEndDateUnadjusted = periodEndDateUnadjusted
+						.plusDays(periodLengthDays)
+						.plusWeeks(periodLengthWeeks)
+						.plusMonths(periodLengthMonth);
+				if(periodEndDateUnadjusted.isAfter(maturity)) {
+					periodEndDateUnadjusted 	= maturity;
 					periodStartDateUnadjusted 	= maturity;	// Terminate loop (next periodEndDateUnadjusted)
 				}
-				// Map to same hour (daylight savings may result in a modified hour).
-				roundToSame(periodEndDateUnadjusted, startDate, Calendar.HOUR_OF_DAY);
 
 				// Adjust period
-				Calendar periodEndDate		= businessdayCalendar.getAdjustedDate(periodEndDateUnadjusted, dateRollConvention);
-				// Map to same hour (daylight savings may result in a modified hour).
-				roundToSame(periodEndDate, startDate, Calendar.HOUR_OF_DAY);
+				LocalDate periodEndDate		= businessdayCalendar.getAdjustedDate(periodEndDateUnadjusted, dateRollConvention);
 	
 				// Skip empty periods
 				if(periodStartDate.compareTo(periodEndDate) == 0) continue;
 
 				// Adjust fixing date
-				Calendar fixingDate = (Calendar)periodStartDate.clone();
-				fixingDate.add(Calendar.DAY_OF_YEAR, fixingOffsetDays);
-				fixingDate = businessdayCalendar.getAdjustedDate(fixingDate, dateRollConvention);
+				LocalDate fixingDate = businessdayCalendar.getAdjustedDate(periodStartDate.plusDays(fixingOffsetDays), dateRollConvention);
 
 				// Adjust payment date
-				Calendar paymentDate = (Calendar)periodEndDate.clone();
-				paymentDate.add(Calendar.DAY_OF_YEAR, paymentOffsetDays);
-				paymentDate = businessdayCalendar.getAdjustedDate(paymentDate, dateRollConvention);
+				LocalDate paymentDate = businessdayCalendar.getAdjustedDate(periodEndDate.plusDays(paymentOffsetDays), dateRollConvention); 
 	
 				// Create period
 				periods.add(new Period(fixingDate, paymentDate, periodStartDate, periodEndDate));
 	
-				periodStartDate				= (Calendar)periodEndDate.clone();
-				periodStartDateUnadjusted	= (Calendar)periodEndDateUnadjusted.clone();
+				periodStartDate				= periodEndDate;
+				periodStartDateUnadjusted	= periodEndDateUnadjusted;
 			}
 		} else {
 			/*
 			 * Going backward on periodEndDate, starting with maturity as periodEndDate
 			 */
-			Calendar periodStartDateUnadjusted	= (Calendar)maturity.clone();
-			Calendar periodEndDateUnadjusted	= (Calendar)maturity.clone();
-			Calendar periodEndDate				= businessdayCalendar.getAdjustedDate(periodEndDateUnadjusted, dateRollConvention);
-			while(periodEndDateUnadjusted.after(startDate)) {
+			LocalDate periodStartDateUnadjusted	= maturity;
+			LocalDate periodEndDateUnadjusted	= maturity;
+			LocalDate periodEndDate				= businessdayCalendar.getAdjustedDate(periodEndDateUnadjusted, dateRollConvention);
+			
+			while(periodEndDateUnadjusted.isAfter(startDate)) {
 				// The following code only makes calculations on periodStartXxx while the periodEndXxx is only copied and used to check if we terminate
 				// Determine period start
-				periodStartDateUnadjusted.add(Calendar.DAY_OF_YEAR, -periodLengthDays);
-				periodStartDateUnadjusted.add(Calendar.WEEK_OF_YEAR, -periodLengthWeeks);
-				periodStartDateUnadjusted.add(Calendar.MONTH, -periodLengthMonth);
-				if(periodStartDateUnadjusted.before(startDate))	{
-					periodStartDateUnadjusted	= (Calendar)startDate.clone();
+				periodStartDateUnadjusted = periodStartDateUnadjusted
+						.minusDays(periodLengthDays)
+						.minusWeeks(periodLengthWeeks)
+						.minusMonths(periodLengthMonth);
+				
+				
+				if(periodStartDateUnadjusted.isBefore(startDate))	{
+					periodStartDateUnadjusted	= startDate;
 					periodEndDateUnadjusted 	= startDate;	// Terminate loop (next periodEndDateUnadjusted)
 				}
-				// Map to same hour (daylight savings may result in a modified hour).
-				roundToSame(periodStartDateUnadjusted, maturity, Calendar.HOUR_OF_DAY);
 
 				// Adjust period
-				Calendar periodStartDate	= businessdayCalendar.getAdjustedDate(periodStartDateUnadjusted, dateRollConvention);
-				// Map to same hour (daylight savings may result in a modified hour).
-				roundToSame(periodStartDate, maturity, Calendar.HOUR_OF_DAY);
+				LocalDate periodStartDate	= businessdayCalendar.getAdjustedDate(periodStartDateUnadjusted, dateRollConvention);
 
 				// Skip empty periods
 				if(periodStartDate.compareTo(periodEndDate) == 0) continue;
 				
 				// Roll fixing date
-				Calendar fixingDate = (Calendar)periodStartDate.clone();
-				fixingDate = businessdayCalendar.getRolledDate(fixingDate, fixingOffsetDays);
+				LocalDate fixingDate = businessdayCalendar.getRolledDate(periodStartDate, fixingOffsetDays);
 				// TODO: There might be an additional calendar adjustment of the fixingDate, if the index has its own businessdayCalendar.
 	
 				// Roll payment date
-				Calendar paymentDate = (Calendar)periodEndDate.clone();
-				paymentDate = businessdayCalendar.getRolledDate(paymentDate, paymentOffsetDays);
+				LocalDate paymentDate = businessdayCalendar.getRolledDate(periodEndDate, paymentOffsetDays);
 				// TODO: There might be an additional calendar adjustment of the paymentDate, if the index has its own businessdayCalendar.
 	
 				// Create period
 				periods.add(0, new Period(fixingDate, paymentDate, periodStartDate, periodEndDate));
 				
-				periodEndDate			= (Calendar)periodStartDate.clone();
-				periodEndDateUnadjusted	= (Calendar)periodStartDateUnadjusted.clone();
+				periodEndDate			= periodStartDate;
+				periodEndDateUnadjusted	= periodStartDateUnadjusted;
 			}
 		}
 
@@ -303,6 +294,56 @@ public class ScheduleGenerator {
 
 	/**
 	 * Schedule generation from meta data.
+	 * 
+	 * Generates a schedule based on some meta data.
+	 * <ul>
+	 * 	<li>The schedule generation considers short stub periods at beginning or at the end.</li>
+	 * 	<li>Date rolling is performed using the provided businessdayCalendar.</li>
+	 * </ul>
+	 * 
+	 * The reference date is used internally to represent all dates as doubles.
+	 * 
+	 * @param referenceDate The date which is used in the schedule to internally convert dates to doubles, i.e., the date where t=0.
+	 * @param startDate The start date of the first period (this may/should be an unadjusted date).
+	 * @param maturityDate The end date of the last period (this may/should be an unadjusted date).
+	 * @param frequency The frequency.
+	 * @param daycountConvention The daycount convention.
+	 * @param shortPeriodConvention If short period exists, have it first or last.
+	 * @param dateRollConvention Adjustment to be applied to the all dates.
+	 * @param businessdayCalendar Businessday calendar (holiday calendar) to be used for date roll adjustment.
+	 * @param fixingOffsetDays Number of days to be added to period start to get the fixing date.
+	 * @param paymentOffsetDays Number of days to be added to period end to get the payment date.
+	 * @return The corresponding schedule
+	 */
+	public static ScheduleInterface createScheduleFromConventions(
+			LocalDate referenceDate,
+			LocalDate startDate,
+			LocalDate maturityDate,
+			String frequency,
+			String daycountConvention,
+			String shortPeriodConvention,
+			String dateRollConvention,
+			BusinessdayCalendarInterface businessdayCalendar,
+			int	fixingOffsetDays,
+			int	paymentOffsetDays
+			)
+	{
+		return createScheduleFromConventions(
+				referenceDate,
+				startDate,
+				maturityDate,
+				Frequency.valueOf(frequency.replace("/", "_").toUpperCase()), 
+				DaycountConvention.getEnum(daycountConvention),
+				ShortPeriodConvention.valueOf(shortPeriodConvention.replace("/", "_").toUpperCase()),
+				DateRollConvention.getEnum(dateRollConvention),
+				businessdayCalendar,
+				fixingOffsetDays,
+				paymentOffsetDays
+				);
+	}
+
+	/**
+	 * Schedule generation from meta data (method using Date instead of LocalDate for backward compatibility).
 	 * 
 	 * Generates a schedule based on some meta data.
 	 * <ul>
@@ -337,23 +378,14 @@ public class ScheduleGenerator {
 			int	paymentOffsetDays
 			)
 	{
-		Calendar referenceDateAsCalendar = GregorianCalendar.getInstance();
-		referenceDateAsCalendar.setTime(referenceDate);
-
-		Calendar startDateAsCalendar = GregorianCalendar.getInstance();
-		startDateAsCalendar.setTime(startDate);
-
-		Calendar maturityDateAsCalendar = GregorianCalendar.getInstance();
-		maturityDateAsCalendar.setTime(maturityDate);
-
 		return createScheduleFromConventions(
-				referenceDateAsCalendar,
-				startDateAsCalendar,
-				maturityDateAsCalendar,
-				Frequency.valueOf(frequency.replace("/", "_").toUpperCase()), 
-				DaycountConvention.getEnum(daycountConvention),
-				ShortPeriodConvention.valueOf(shortPeriodConvention.replace("/", "_").toUpperCase()),
-				DateRollConvention.getEnum(dateRollConvention),
+				new LocalDate(frequency),
+				new LocalDate(startDate),
+				new LocalDate(maturityDate),
+				frequency,
+				daycountConvention,
+				shortPeriodConvention,
+				dateRollConvention,
 				businessdayCalendar,
 				fixingOffsetDays,
 				paymentOffsetDays
@@ -381,8 +413,8 @@ public class ScheduleGenerator {
 	 * @return The corresponding schedule
 	 */
 	public static ScheduleInterface createScheduleFromConventions(
-			Date referenceDate,
-			Date tradeDate,
+			LocalDate referenceDate,
+			LocalDate tradeDate,
 			int spotOffsetDays,
 			String startOffset,
 			String maturity,
@@ -395,22 +427,17 @@ public class ScheduleGenerator {
 			int	paymentOffsetDays
 			)
 	{
-		Calendar referenceDateAsCalendar = GregorianCalendar.getInstance();
-		referenceDateAsCalendar.setTime(referenceDate);
-
-		Calendar tradeDateAsCalendar = GregorianCalendar.getInstance();
-		tradeDateAsCalendar.setTime(tradeDate);
 	
-		Calendar spotDateAsCalendar = businessdayCalendar.getRolledDate(tradeDateAsCalendar, spotOffsetDays);
+		LocalDate spotDate = businessdayCalendar.getRolledDate(tradeDate, spotOffsetDays);
 		
-		Calendar startDateAsCalendar = BusinessdayCalendar.createDateFromDateAndOffsetCode(spotDateAsCalendar, startOffset);
+		LocalDate startDate = BusinessdayCalendar.createDateFromDateAndOffsetCode(spotDate, startOffset);
 	
-		Calendar maturityAsCalendar = BusinessdayCalendar.createDateFromDateAndOffsetCode(startDateAsCalendar, maturity);
+		LocalDate maturityDate = BusinessdayCalendar.createDateFromDateAndOffsetCode(startDate, maturity);
 	
 		return createScheduleFromConventions(
-				referenceDateAsCalendar,
-				startDateAsCalendar,
-				maturityAsCalendar,
+				referenceDate,
+				startDate,
+				maturityDate,
 				Frequency.valueOf(frequency.replace("/", "_").toUpperCase()), 
 				DaycountConvention.getEnum(daycountConvention),
 				ShortPeriodConvention.valueOf(shortPeriodConvention.replace("/", "_").toUpperCase()),
@@ -441,7 +468,7 @@ public class ScheduleGenerator {
 	 * @return The corresponding schedule
 	 */
 	public static ScheduleInterface createScheduleFromConventions(
-			Date referenceDate,
+			LocalDate referenceDate,
 			int spotOffsetDays,
 			String startOffset,
 			String maturity,
@@ -476,7 +503,7 @@ public class ScheduleGenerator {
 	 * @return The corresponding schedule
 	 */
 	public static ScheduleInterface createScheduleFromConventions(
-			Date referenceDate,
+			LocalDate referenceDate,
 			String startOffset,
 			String maturity,
 			String frequency,
@@ -488,17 +515,14 @@ public class ScheduleGenerator {
 			int	paymentOffsetDays
 			)
 	{
-		Calendar referenceDateAsCalendar = GregorianCalendar.getInstance();
-		referenceDateAsCalendar.setTime(referenceDate);
+		LocalDate startDate = BusinessdayCalendar.createDateFromDateAndOffsetCode(referenceDate, startOffset);
 	
-		Calendar startDateAsCalendar = BusinessdayCalendar.createDateFromDateAndOffsetCode(referenceDateAsCalendar, startOffset);
-	
-		Calendar maturityAsCalendar = BusinessdayCalendar.createDateFromDateAndOffsetCode(startDateAsCalendar, maturity);
+		LocalDate maturityDate = BusinessdayCalendar.createDateFromDateAndOffsetCode(startDate, maturity);
 	
 		return createScheduleFromConventions(
-				referenceDateAsCalendar,
-				startDateAsCalendar,
-				maturityAsCalendar,
+				referenceDate,
+				startDate,
+				maturityDate,
 				Frequency.valueOf(frequency.replace("/", "_").toUpperCase()), 
 				DaycountConvention.getEnum(daycountConvention),
 				ShortPeriodConvention.valueOf(shortPeriodConvention.replace("/", "_").toUpperCase()),
@@ -526,8 +550,8 @@ public class ScheduleGenerator {
 	 * @return The corresponding schedule
 	 */
 	public static ScheduleInterface createScheduleFromConventions(
-			Date referenceDate,
-			Date startDate,
+			LocalDate referenceDate,
+			LocalDate startDate,
 			String frequency,
 			double maturity,
 			String daycountConvention,
@@ -538,18 +562,12 @@ public class ScheduleGenerator {
 			int	paymentOffsetDays
 			)
 	{
-		Calendar referenceDateAsCalendar = GregorianCalendar.getInstance();
-		referenceDateAsCalendar.setTime(referenceDate);
-
-		Calendar startDateAsCalendar = GregorianCalendar.getInstance();
-		startDateAsCalendar.setTime(startDate);
-
-		Calendar maturityAsCalendar = createDateFromDateAndOffset(startDateAsCalendar, maturity);
+		LocalDate maturityDate = createDateFromDateAndOffset(startDate, maturity);
 	
 		return createScheduleFromConventions(
-				referenceDateAsCalendar,
-				startDateAsCalendar,
-				maturityAsCalendar,
+				referenceDate,
+				startDate,
+				maturityDate,
 				Frequency.valueOf(frequency.toUpperCase()), 
 				DaycountConvention.getEnum(daycountConvention),
 				ShortPeriodConvention.valueOf(shortPeriodConvention.toUpperCase()),
@@ -574,8 +592,8 @@ public class ScheduleGenerator {
 	 * @return The corresponding schedule
 	 */
 	public static ScheduleInterface createScheduleFromConventions(
-			Date referenceDate,
-			Date startDate,
+			LocalDate referenceDate,
+			LocalDate startDate,
 			String frequency,
 			double maturity,
 			String daycountConvention,
@@ -606,30 +624,19 @@ public class ScheduleGenerator {
 	 * @param offsetYearFrac The year fraction in 30/360 to be used for adding to the start date.
 	 * @return A date corresponding the maturity.
 	 */
-	private static Calendar createDateFromDateAndOffset(Calendar baseDate, double offsetYearFrac) {
+	private static LocalDate createDateFromDateAndOffset(LocalDate baseDate, double offsetYearFrac) {
 
 		// Years
-		Calendar maturity = (Calendar)baseDate.clone();
-		maturity.add(Calendar.YEAR, (int)offsetYearFrac);
+		LocalDate maturity = baseDate.plusYears((int)offsetYearFrac);
 		
 		// Months
 		offsetYearFrac = (offsetYearFrac - (int)offsetYearFrac) * 12;
-		maturity.add(Calendar.MONTH, (int)offsetYearFrac);
+		maturity = maturity.plusMonths((int)offsetYearFrac);
 		
 		// Days
 		offsetYearFrac = (offsetYearFrac - (int)offsetYearFrac) * 30;
-		maturity.add(Calendar.DAY_OF_YEAR, (int)Math.round(offsetYearFrac));
+		maturity = maturity.plusDays((int)Math.round(offsetYearFrac));
 
-		// Adjust hour to be the same (may differ by one due to daylight savings)
-		roundToSame(maturity, baseDate, Calendar.HOUR_OF_DAY);
 		return maturity;
-	}
-
-	private static void roundToSame(Calendar date, Calendar referenceDate, int field) {
-		int difference	= date.get(field) - referenceDate.get(field);
-		int half		= date.getActualMaximum(field) / 2;
-
-		if(difference > 0 && difference <= half || difference < 0 && difference >= half)	date.add(field, -Math.abs(difference));
-		else																				date.add(field, +Math.abs(difference));
 	}
 }

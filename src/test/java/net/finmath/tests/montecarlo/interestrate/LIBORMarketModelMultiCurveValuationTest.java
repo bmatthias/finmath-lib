@@ -14,12 +14,19 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
+
 import net.finmath.exception.CalculationException;
 import net.finmath.functions.AnalyticFormulas;
 import net.finmath.marketdata.model.curves.DiscountCurve;
 import net.finmath.marketdata.model.curves.DiscountCurveInterface;
 import net.finmath.marketdata.model.curves.ForwardCurve;
 import net.finmath.marketdata.model.curves.ForwardCurveInterface;
+import net.finmath.montecarlo.BrownianMotionInterface;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel;
 import net.finmath.montecarlo.interestrate.LIBORMarketModelInterface.CalibrationItem;
 import net.finmath.montecarlo.interestrate.LIBORMarketModel.Measure;
@@ -33,6 +40,7 @@ import net.finmath.montecarlo.interestrate.modelplugins.LIBORCovarianceModelFrom
 import net.finmath.montecarlo.interestrate.modelplugins.LIBORVolatilityModelFromGivenMatrix;
 import net.finmath.montecarlo.interestrate.products.AbstractLIBORMonteCarloProduct;
 import net.finmath.montecarlo.interestrate.products.Bond;
+import net.finmath.montecarlo.interestrate.products.Caplet;
 import net.finmath.montecarlo.interestrate.products.DigitalCaplet;
 import net.finmath.montecarlo.interestrate.products.SimpleSwap;
 import net.finmath.montecarlo.interestrate.products.Swaption;
@@ -41,12 +49,6 @@ import net.finmath.montecarlo.interestrate.products.SwaptionAnalyticApproximatio
 import net.finmath.montecarlo.process.ProcessEulerScheme;
 import net.finmath.time.TimeDiscretization;
 import net.finmath.time.TimeDiscretizationInterface;
-
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
 /**
  * This class tests the LIBOR market model and products.
@@ -64,8 +66,10 @@ public class LIBORMarketModelMultiCurveValuationTest {
 		});
 	};
 
-	private final int numberOfPaths		= 100000;
+	private final int numberOfPaths		= 40000;
 	private final int numberOfFactors	= 6;
+
+	private final Measure measure;
 
 	private LIBORModelMonteCarloSimulationInterface liborMarketModel; 
 
@@ -74,6 +78,8 @@ public class LIBORMarketModelMultiCurveValuationTest {
 	private static DecimalFormat formatterDeviation	= new DecimalFormat(" 0.00000E00;-0.00000E00", new DecimalFormatSymbols(Locale.ENGLISH));
 
 	public LIBORMarketModelMultiCurveValuationTest(Measure measure) throws CalculationException {
+		// Store measure
+		this.measure = measure;
 
 		// Create a libor market model
 		liborMarketModel = createLIBORMarketModel(measure, numberOfPaths, numberOfFactors, 0.1 /* Correlation */);
@@ -172,10 +178,9 @@ public class LIBORMarketModelMultiCurveValuationTest {
 		LIBORMarketModelInterface liborMarketModel = new LIBORMarketModel(
 				liborPeriodDiscretization, forwardCurve, discountCurve, covarianceModel, calibrationItems, properties);
 
-		ProcessEulerScheme process = new ProcessEulerScheme(
-				new net.finmath.montecarlo.BrownianMotion(timeDiscretization,
-						numberOfFactors, numberOfPaths, 3141 /* seed */));
-		//		process.setScheme(ProcessEulerScheme.Scheme.PREDICTOR_CORRECTOR);
+		BrownianMotionInterface brownianMotion = new net.finmath.montecarlo.BrownianMotion(timeDiscretization, numberOfFactors, numberOfPaths, 3141 /* seed */);
+
+		ProcessEulerScheme process = new ProcessEulerScheme(brownianMotion, ProcessEulerScheme.Scheme.PREDICTOR_CORRECTOR);
 
 		return new LIBORModelMonteCarloSimulation(liborMarketModel, process);
 	}
@@ -233,14 +238,13 @@ public class LIBORMarketModelMultiCurveValuationTest {
 
 			double startDate = liborMarketModel.getLiborPeriod(maturityIndex);
 
-
-			int numberOfPeriods = 5;
+			int numberOfPeriods = 10;
 
 			// Create a swap
 			double[]	fixingDates			= new double[numberOfPeriods];
 			double[]	paymentDates		= new double[numberOfPeriods];
 			double[]	swapTenor			= new double[numberOfPeriods + 1];
-			double		swapPeriodLength	= 1.0;
+			double		swapPeriodLength	= 0.5;
 
 			for (int periodStartIndex = 0; periodStartIndex < numberOfPeriods; periodStartIndex++) {
 				fixingDates[periodStartIndex]	= startDate + periodStartIndex * swapPeriodLength;
@@ -277,7 +281,62 @@ public class LIBORMarketModelMultiCurveValuationTest {
 		 * jUnit assertion: condition under which we consider this test successful
 		 * The swap should be at par (close to zero)
 		 */
-		Assert.assertTrue(maxAbsDeviation < 5E-3);
+		if(measure == Measure.SPOT)	Assert.assertTrue(maxAbsDeviation < 1E-3);
+		else						Assert.assertTrue(maxAbsDeviation < 1E-2);
+	}
+
+	@Test
+	public void testCaplet() throws CalculationException {
+		/*
+		 * Value a caplet
+		 */
+		System.out.println("Caplet prices:\n");
+		System.out.println("Maturity      Simulation       Analytic        Deviation");
+	
+		double maxAbsDeviation = 0.0;
+		for (int maturityIndex = 1; maturityIndex <= liborMarketModel.getNumberOfLibors() - 10; maturityIndex++) {
+	
+			double optionMaturity = liborMarketModel.getLiborPeriod(maturityIndex);
+			System.out.print(formatterMaturity.format(optionMaturity) + "          ");
+	
+			double periodStart	= liborMarketModel.getLiborPeriod(maturityIndex);
+			double periodEnd	= liborMarketModel.getLiborPeriod(maturityIndex+1);
+			double periodLength	= periodEnd-periodStart;
+			double daycountFraction = periodEnd-periodStart;
+	
+			double strike = 0.05;
+	
+			// Create a caplet
+			Caplet caplet = new Caplet(optionMaturity, periodLength, strike, daycountFraction, false /* isFloorlet */, Caplet.ValueUnit.VALUE);
+
+			// Value with Monte Carlo
+			double valueSimulation = caplet.getValue(liborMarketModel);
+			System.out.print(formatterValue.format(valueSimulation) + "          ");
+	
+			// Value analytic
+			double forward			= getParSwaprate(liborMarketModel, new double[] { periodStart , periodEnd});
+			double discountFactor	= getSwapAnnuity(liborMarketModel, new double[] { periodStart , periodEnd}) / periodLength;
+			int optionMaturityIndex = liborMarketModel.getTimeIndex(optionMaturity);
+			int liborIndex = liborMarketModel.getLiborPeriodIndex(periodStart);
+			double volatility = Math.sqrt(liborMarketModel.getModel().getIntegratedLIBORCovariance()[optionMaturityIndex][liborIndex][liborIndex]/optionMaturity);
+			double valueAnalytic = net.finmath.functions.AnalyticFormulas.blackModelCapletValue(forward, volatility, optionMaturity, strike, periodLength, discountFactor);
+			System.out.print(formatterValue.format(valueAnalytic) + "          ");
+	
+			// Absolute deviation
+			double deviation = (valueSimulation - valueAnalytic);
+			System.out.println(formatterDeviation.format(deviation) + "          ");
+	
+			maxAbsDeviation = Math.max(maxAbsDeviation, Math.abs(deviation));
+		}
+
+		System.out.println("Maximum abs deviation: " + formatterDeviation.format(maxAbsDeviation));
+		System.out.println("__________________________________________________________________________________________\n");
+	
+		/*
+		 * jUnit assertion: condition under which we consider this test successful
+		 */
+		if(measure == Measure.SPOT) Assert.assertTrue(Math.abs(maxAbsDeviation) < 2E-4);
+		else						Assert.assertTrue(Math.abs(maxAbsDeviation) < 2E-3);
 	}
 
 	@Test
@@ -563,8 +622,7 @@ public class LIBORMarketModelMultiCurveValuationTest {
 		 */
 		ProcessEulerScheme process = new ProcessEulerScheme(
 				new net.finmath.montecarlo.BrownianMotion(timeDiscretization,
-						numberOfFactors, numberOfPaths, 3141 /* seed */));
-		process.setScheme(ProcessEulerScheme.Scheme.PREDICTOR_CORRECTOR);
+						numberOfFactors, numberOfPaths, 3141 /* seed */), ProcessEulerScheme.Scheme.PREDICTOR_CORRECTOR);
 
 		net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulation calMode = new net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulation(
 				liborMarketModelCalibrated, process);

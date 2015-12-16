@@ -117,17 +117,25 @@ public class LinearAlgebra {
 	 * @param numberOfFactors The requested number of factors (eigenvectors).
 	 * @return Matrix of n Eigenvectors (columns) (matrix is given as double[n][numberOfFactors], where n is the number of rows of the correlationMatrix.
 	 */
-	public static double[][] getFactorMatrix(double[][] correlationMatrix, int numberOfFactors) {
-        boolean  isUseApacheCommonsMath = false;
-        boolean  isUseColt = false;
-		if(isUseApacheCommonsMath) {
-			/*
-			 * Note: Commons math has convergence problems, where Colt does not.
-			 */
-            return getFactorMatrixUsingCommonsMath(correlationMatrix, numberOfFactors);
-		} else if(isUseColt) {
-			return getFactorMatrixUsingColt(new DenseDoubleMatrix2D(correlationMatrix), numberOfFactors).toArray();
-		} else {
+    public static double[][] getFactorMatrix(double[][] correlationMatrix, int numberOfFactors) {
+        boolean  isUseApacheCommonsMath = true;
+        /*
+	    * Note: Commons math has convergence problems, where Colt does less frequently.
+	    * Colt has no issues with concurrency, however it may be noticeably slower than
+	    * commons math in multi-threaded calibration tasks.
+	    * Jblas as a wrapper around the native C++ Ublas library generally shows best performance
+	    * and no convergence issues. Unfortunately it is not thread safe,
+	    * which makes it necessary to synchronize this method and therefore
+	    * greatly reduces performance in multi-threaded calibrations.
+	    * TODO: There is still a huge potential for performance improvements here.
+		*/
+        try {
+            if (isUseApacheCommonsMath) {
+                return getFactorMatrixUsingCommonsMath(correlationMatrix, numberOfFactors);
+            } else {
+                return getFactorMatrixUsingColt(new DenseDoubleMatrix2D(correlationMatrix), numberOfFactors).toArray();
+            }
+        } catch (Exception e) {
             return getFactorMatrixUsingJblas(correlationMatrix, numberOfFactors);
         }
     }
@@ -159,7 +167,7 @@ public class LinearAlgebra {
      * @param numberOfFactors The requested number of factors (Eigenvectors).
      * @return Matrix of n Eigenvectors (columns) (matrix is given as double[n][numberOfFactors], where n is the number of rows of the correlationMatrix.
      */
-    private static double[][] getFactorMatrixUsingJblas(double[][] correlationMatrix, int numberOfFactors) {
+    private static synchronized double[][] getFactorMatrixUsingJblas(double[][] correlationMatrix, int numberOfFactors) {
         DoubleMatrix[] eigenDecomp = Eigen.symmetricEigenvectors(new DoubleMatrix(correlationMatrix));
 
         DoubleMatrix eigenValueMatrix	= eigenDecomp[1];

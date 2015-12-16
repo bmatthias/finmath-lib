@@ -4,18 +4,11 @@ import net.finmath.functions.AnalyticFormulas;
 import net.finmath.marketdata.model.AnalyticModel;
 import net.finmath.marketdata.model.AnalyticModelInterface;
 import net.finmath.marketdata.model.curves.*;
-import net.finmath.marketdata.products.SwapAnnuity;
 import net.finmath.montecarlo.interestrate.LIBORMarketModelInterface;
-import net.finmath.montecarlo.interestrate.products.AbstractLIBORMonteCarloProduct;
-import net.finmath.montecarlo.interestrate.products.Caplet;
-import net.finmath.montecarlo.interestrate.products.SwaptionAnalyticApproximation;
-import net.finmath.montecarlo.interestrate.products.SwaptionFactory;
+import net.finmath.montecarlo.interestrate.products.*;
 import net.finmath.tests.montecarlo.interestrate.tools.CalibrationData;
 import net.finmath.time.TimeDiscretization;
 import net.finmath.time.TimeDiscretizationInterface;
-
-import java.util.ArrayList;
-import java.util.Arrays;
 
 public class SyntheticCaplets extends CalibrationData {
     public SyntheticCaplets(TimeDiscretizationInterface timeDiscretization,
@@ -78,11 +71,11 @@ public class SyntheticCaplets extends CalibrationData {
 
             double eoniaStrike = eoniaForwardCurve.getForward(null, maturity);
             AbstractLIBORMonteCarloProduct eoniaCaplet = new Caplet(maturity, periodLength, eoniaStrike, false);
-            AbstractLIBORMonteCarloProduct eoniaCapletAnalytic = new SwaptionAnalyticApproximation(eoniaStrike, new double[]{ maturity, maturity + periodLength }, SwaptionAnalyticApproximation.ValueUnit.VOLATILITY);
+            AbstractLIBORMonteCarloProduct eoniaCapletAnalytic = new CapletAnalyticApproximation(eoniaStrike, maturity, CapletAnalyticApproximation.ValueUnit.VOLATILITY);
 
             double euriborStrike = euriborForwardCurve.getForward(null, maturity);
             AbstractLIBORMonteCarloProduct euriborCaplet = new Caplet(maturity, periodLength, euriborStrike, false);
-            AbstractLIBORMonteCarloProduct euriborCapletAnalytic = new SwaptionAnalyticApproximation(euriborStrike, new double[]{ maturity, maturity + periodLength }, SwaptionAnalyticApproximation.ValueUnit.VOLATILITY);
+            AbstractLIBORMonteCarloProduct euriborCapletAnalytic = new CapletAnalyticApproximation(euriborStrike, maturity, CapletAnalyticApproximation.ValueUnit.VOLATILITY);
 
             double eoniaVolatility = 0.35 + (0.45 - 0.35) * Math.exp(-(double)component / numberOfTimeSteps);
             double euriborVolatility = 0.30 + (0.40 - 0.30) * Math.exp(-(double)component / numberOfTimeSteps);

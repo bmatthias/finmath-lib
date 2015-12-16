@@ -103,10 +103,10 @@ public class Caplet extends AbstractLIBORMonteCarloProduct {
 
 	public RandomVariableInterface getValue(double evaluationTime, LIBORModelMonteCarloSimulationInterface model, ValueUnit valueUnit) throws CalculationException {
 		// This is on the LIBOR discretization
-		double	paymentDate	= maturity+periodLength;
+		double	paymentDate	= maturity + periodLength;
 				
 		// Get random variables
-		RandomVariableInterface	libor					= model.getLIBOR(maturity, maturity, maturity+periodLength);
+		RandomVariableInterface	libor					= model.getLIBOR(maturity, maturity, maturity + periodLength);
 		RandomVariableInterface	numeraire				= model.getNumeraire(paymentDate);
 		RandomVariableInterface	monteCarloProbabilities	= model.getMonteCarloWeights(model.getTimeIndex(paymentDate));
 	
@@ -127,24 +127,20 @@ public class Caplet extends AbstractLIBORMonteCarloProduct {
 
 		if(valueUnit == ValueUnit.VALUE) {
 			return values;
-		}
-		else if(valueUnit == ValueUnit.VOLATILITY) {
+		} else if(valueUnit == ValueUnit.VOLATILITY) {
 			/*
 			 * This calculation makes sense only if the value is an unconditional one.
 			 */
-            RandomVariableInterface forward;
-            if (model.getModel() instanceof MultiCurveLIBORMarketModel) {
-                forward = ((MultiCurveLIBORMarketModel)model.getModel()).getForward(model.getTimeIndex(evaluationTime), model.getLiborPeriodIndex(maturity));
-            } else {
-                forward = libor;
-            }
-            forward = forward.div(numeraire).mult(monteCarloProbabilities).mult(numeraireAtValuationTime).div(monteCarloProbabilitiesAtValuationTime);
-			double optionMaturity = maturity-evaluationTime;
+            RandomVariableInterface forward = model.getLIBOR(evaluationTime, maturity, maturity + periodLength)
+                    .mult(monteCarloProbabilities)
+                    .mult(numeraireAtValuationTime)
+                    .div(monteCarloProbabilitiesAtValuationTime);
+
+            double optionMaturity = maturity - evaluationTime;
 			double optionStrike = strike;
-			double payoffUnit = daycountFraction * model.getModel().getDiscountCurve().getDiscountFactor(maturity + periodLength);;
+			double payoffUnit = daycountFraction * model.getModel().getDiscountCurve().getDiscountFactor(maturity + periodLength); //TODO: Need discount factor at evaluation time.
 			return model.getRandomVariableForConstant(AnalyticFormulas.blackScholesOptionImpliedVolatility(forward.getAverage(), optionMaturity, optionStrike, payoffUnit, values.getAverage()));
-		}
-		else {
+		} else {
 			throw new IllegalArgumentException("Value unit " + valueUnit + " unsupported.");
 		}
 	}

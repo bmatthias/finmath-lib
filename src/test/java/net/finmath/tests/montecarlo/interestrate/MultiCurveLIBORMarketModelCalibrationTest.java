@@ -47,7 +47,7 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
     private boolean useSeperateCorrelationModels = false;
     private String tenor = "1m";
     private String productType;
-    private int numberOfSeeds = 10;
+    private int numberOfSeeds = 1;
 
     private boolean calibrateSC = true;
     private boolean calibrateMC = true;
@@ -383,6 +383,10 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
             return ((SwaptionSimple) product).getValue(0.0, simulation, ProductInterface.ValueUnit.valueOf(valueUnit)).getAverage();
         } else if (product instanceof Caplet) {
             return ((Caplet) product).getValue(0.0, simulation, ProductInterface.ValueUnit.valueOf(valueUnit)).getAverage();
+        } else if (product instanceof CapletAnalyticApproximation) {
+            return ((CapletAnalyticApproximation) product).getValue(0.0, simulation,
+                    CapletAnalyticApproximation.MultiCurveApproximation.FENTON_WILKINSON,
+                    ProductInterface.ValueUnit.valueOf(valueUnit)).getAverage();
         } else {
             throw new IllegalArgumentException("Product must be a Caplet or Swaption!");
         }

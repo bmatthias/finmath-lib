@@ -1,5 +1,7 @@
 package net.finmath;
 
+import org.jblas.DoubleMatrix;
+
 public class MatrixUtils {
     public static boolean checkSymmetry(double[][] matrix) {
         for (int row = 0; row < matrix.length; row++) {
@@ -35,5 +37,21 @@ public class MatrixUtils {
             stringBuilder.append("\n");
         }
         return stringBuilder.toString();
+    }
+
+    public static double[][] createIdentityMatrix(int dimension) {
+        double[][] identityMatrix = new double[dimension][dimension];
+        for(int i = 0; i < dimension; i++) {
+            identityMatrix[i][i] = 1.0;
+        }
+        return identityMatrix;
+    }
+
+    public static void setSubMatrix(DoubleMatrix matrix, double[][] subMatrix, int fromRow, int fromColumn) {
+        for(int row = 0; row < subMatrix.length; row++) {
+            for(int column = 0; column < subMatrix[row].length; column++) {
+                matrix.put(fromRow + row, fromColumn + column, subMatrix[row][column]);
+            }
+        }
     }
 }

@@ -10,12 +10,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.commons.math3.linear.*;
-
 import cern.colt.matrix.DoubleMatrix1D;
 import cern.colt.matrix.DoubleMatrix2D;
 import cern.colt.matrix.impl.DenseDoubleMatrix2D;
 import cern.colt.matrix.linalg.EigenvalueDecomposition;
+import net.finmath.MatrixUtils;
+import org.apache.commons.math3.linear.*;
 import org.jblas.DoubleMatrix;
 import org.jblas.Eigen;
 
@@ -354,37 +354,39 @@ public class LinearAlgebra {
 		return getFactorMatrixUsingColt(reducedCorrelationMatrix, numberOfFactors);
 	}
 
-    public static RealMatrix getFactorMatrixFromBlockCorrelationMatrix(int numberOfFactors,
+    public static DoubleMatrix getFactorMatrixFromBlockCorrelationMatrix(int numberOfFactors,
                                                                        double[][] firstCurveCorrelationMatrix,
                                                                        double[][] secondCurveCorrelationMatrix,
                                                                        double[][] curvesCorrelationMatrix) {
         int dimension = firstCurveCorrelationMatrix.length;
-        Array2DRowRealMatrix factorMatrix;
+        DoubleMatrix factorMatrix;
         RRQRDecomposition rrqrDecomposition = new RRQRDecomposition(new Array2DRowRealMatrix(firstCurveCorrelationMatrix));
         if (rrqrDecomposition.getRank(1e-10) == dimension) {
-            RealMatrix inverseOfFirstMatrix = rrqrDecomposition.getSolver().getInverse();
-            RealMatrix C = new Array2DRowRealMatrix(curvesCorrelationMatrix);
-            RealMatrix inverseATimesC = inverseOfFirstMatrix.multiply(C);
-            Array2DRowRealMatrix B = (Array2DRowRealMatrix)new Array2DRowRealMatrix(secondCurveCorrelationMatrix).subtract(C.transpose().multiply(inverseATimesC));
+            DoubleMatrix inverseOfFirstMatrix = new DoubleMatrix(rrqrDecomposition.getSolver().getInverse().getData());
+            DoubleMatrix C = new DoubleMatrix(curvesCorrelationMatrix);
+            DoubleMatrix inverseATimesC = inverseOfFirstMatrix.mmul(C);
+            double[][] B = new DoubleMatrix(secondCurveCorrelationMatrix).sub(C.transpose().mmul(inverseATimesC)).toArray2();
 
-            Array2DRowRealMatrix N = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
-            N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), 0, 0);
-            N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), dimension, dimension);
-            N.setSubMatrix(inverseATimesC.getData(), 0, dimension);
+            //setSubMatrix uses arrayCopy internally, so creating the identity matrix only once is fine
+            double[][] identityMatrix = MatrixUtils.createIdentityMatrix(dimension);
+            DoubleMatrix N = new DoubleMatrix(2 * dimension, 2 * dimension);
+            MatrixUtils.setSubMatrix(N, identityMatrix, 0, 0);
+            MatrixUtils.setSubMatrix(N, identityMatrix, dimension, dimension);
+            MatrixUtils.setSubMatrix(N, inverseATimesC.toArray2(), 0, dimension);
 
             /*
              * Perform a factor decomposition (and reduction if numberOfFactors < correlationMatrix.columns())
              */
-            fixSymmetry(B.getDataRef());
+            fixSymmetry(B);
 
             double[][] firstFactorMatrix = factorReduction(firstCurveCorrelationMatrix, (int) Math.ceil(0.5 * numberOfFactors));
-            double[][] secondFactorMatrix = factorReduction(B.getData(), numberOfFactors / 2);
+            double[][] secondFactorMatrix = factorReduction(B, numberOfFactors / 2);
 
-            RealMatrix M = new Array2DRowRealMatrix(2 * dimension, numberOfFactors);
-            M.setSubMatrix(firstFactorMatrix, 0, 0);
-            M.setSubMatrix(secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
+            DoubleMatrix M = new DoubleMatrix(2 * dimension, numberOfFactors);
+            MatrixUtils.setSubMatrix(M, firstFactorMatrix, 0, 0);
+            MatrixUtils.setSubMatrix(M, secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
 
-            factorMatrix = new Array2DRowRealMatrix(N.transpose().multiply(M).getData());
+            factorMatrix = N.transpose().mmul(M);
             /*normalizeRows(factorMatrix.getDataRef());
 
             double[][] reducedCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
@@ -392,47 +394,49 @@ public class LinearAlgebra {
         } else {
             rrqrDecomposition = new RRQRDecomposition(new Array2DRowRealMatrix(secondCurveCorrelationMatrix));
             if (rrqrDecomposition.getRank(1e-10) == dimension) {
-                RealMatrix inverseOfSecondMatrix = rrqrDecomposition.getSolver().getInverse();
-                RealMatrix C = new Array2DRowRealMatrix(curvesCorrelationMatrix);
-                RealMatrix cTimesInverseD = C.multiply(inverseOfSecondMatrix);
-                Array2DRowRealMatrix B = (Array2DRowRealMatrix)new Array2DRowRealMatrix(firstCurveCorrelationMatrix).subtract(cTimesInverseD.multiply(C.transpose()));
+                DoubleMatrix inverseOfSecondMatrix = new DoubleMatrix(rrqrDecomposition.getSolver().getInverse().getData());
+                DoubleMatrix C = new DoubleMatrix(curvesCorrelationMatrix);
+                DoubleMatrix cTimesInverseD = C.mmul(inverseOfSecondMatrix);
+                double[][] B = new DoubleMatrix(firstCurveCorrelationMatrix).sub(cTimesInverseD.mmul(C.transpose())).toArray2();
 
-                Array2DRowRealMatrix N = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
-                N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), 0, 0);
-                N.setSubMatrix(MatrixUtils.createRealIdentityMatrix(dimension).getData(), dimension, dimension);
-                N.setSubMatrix(cTimesInverseD.getData(), 0, dimension);
+                //setSubMatrix uses arrayCopy internally, so creating the identity matrix only once is fine
+                double[][] identityMatrix = MatrixUtils.createIdentityMatrix(dimension);
+                DoubleMatrix N = new DoubleMatrix(2 * dimension, 2 * dimension);
+                MatrixUtils.setSubMatrix(N, identityMatrix, 0, 0);
+                MatrixUtils.setSubMatrix(N, identityMatrix, dimension, dimension);
+                MatrixUtils.setSubMatrix(N, cTimesInverseD.toArray2(), 0, dimension);
 
                 /*
                  * Perform a factor decomposition (and reduction if numberOfFactors < correlationMatrix.columns())
                  */
-                fixSymmetry(B.getDataRef());
+                fixSymmetry(B);
 
-                double[][] firstFactorMatrix = factorReduction(B.getData(), (int) Math.ceil(0.5 * numberOfFactors));
+                double[][] firstFactorMatrix = factorReduction(B, (int) Math.ceil(0.5 * numberOfFactors));
                 double[][] secondFactorMatrix = factorReduction(secondCurveCorrelationMatrix, numberOfFactors / 2);
 
-                RealMatrix M = new Array2DRowRealMatrix(2 * dimension, numberOfFactors);
-                M.setSubMatrix(firstFactorMatrix, 0, 0);
-                M.setSubMatrix(secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
+                DoubleMatrix M = new DoubleMatrix(2 * dimension, numberOfFactors);
+                MatrixUtils.setSubMatrix(M, firstFactorMatrix, 0, 0);
+                MatrixUtils.setSubMatrix(M, secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
 
-                factorMatrix = new Array2DRowRealMatrix(N.multiply(M).getData());
+                factorMatrix = N.mmul(M);
                 /*normalizeRows(factorMatrix.getDataRef());
 
                 double[][] reducedCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
                 factorMatrix = new Array2DRowRealMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));*/
             } else {
-                RealMatrix correlationMatrix = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
-                correlationMatrix.setSubMatrix(firstCurveCorrelationMatrix, 0, 0);
-                correlationMatrix.setSubMatrix(secondCurveCorrelationMatrix, dimension, dimension);
-                correlationMatrix.setSubMatrix(curvesCorrelationMatrix, 0, dimension);
-                correlationMatrix.setSubMatrix(new Array2DRowRealMatrix(curvesCorrelationMatrix).transpose().getData(), dimension, 0);
+                DoubleMatrix correlationMatrix = new DoubleMatrix(2 * dimension, 2 * dimension);
+                MatrixUtils.setSubMatrix(correlationMatrix, firstCurveCorrelationMatrix, 0, 0);
+                MatrixUtils.setSubMatrix(correlationMatrix, secondCurveCorrelationMatrix, dimension, dimension);
+                MatrixUtils.setSubMatrix(correlationMatrix, curvesCorrelationMatrix, 0, dimension);
+                MatrixUtils.setSubMatrix(correlationMatrix, new DoubleMatrix(curvesCorrelationMatrix).transpose().toArray2(), dimension, 0);
 
-                factorMatrix = new Array2DRowRealMatrix(factorReduction(correlationMatrix.getData(), numberOfFactors));
+                factorMatrix = new DoubleMatrix(factorReduction(correlationMatrix.toArray2(), numberOfFactors));
             }
         }
         return factorMatrix;
     }
 
-    private static void fixSymmetry(double[][] matrix) {
+    public static void fixSymmetry(double[][] matrix) {
         for (int i = 0; i < matrix.length; i++) {
             for (int j = 0; j < matrix.length; j++) {
                 matrix[i][j] = matrix[j][i] = 0.5 * (matrix[j][i] + matrix[i][j]);

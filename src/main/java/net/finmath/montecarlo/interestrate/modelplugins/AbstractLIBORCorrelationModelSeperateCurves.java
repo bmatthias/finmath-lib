@@ -3,6 +3,7 @@ package net.finmath.montecarlo.interestrate.modelplugins;
 import net.finmath.functions.LinearAlgebra;
 import net.finmath.time.TimeDiscretizationInterface;
 import org.apache.commons.math3.linear.RealMatrix;
+import org.jblas.DoubleMatrix;
 
 public abstract class AbstractLIBORCorrelationModelSeperateCurves extends AbstractMultiCurveLIBORCorrelationModel {
 
@@ -27,12 +28,11 @@ public abstract class AbstractLIBORCorrelationModelSeperateCurves extends Abstra
                 timeSteps, firstCurveCorrelationMatrix, secondCurveCorrelationMatrix, curvesCorrelationMatrix
         );
 
-        RealMatrix factorMatrix = LinearAlgebra.getFactorMatrixFromBlockCorrelationMatrix(
+        DoubleMatrix factorMatrix = LinearAlgebra.getFactorMatrixFromBlockCorrelationMatrix(
                 getNumberOfFactors(), firstCurveCorrelationMatrix, secondCurveCorrelationMatrix, curvesCorrelationMatrix
         );
-
-        this.factorMatrix = factorMatrix.getData();
-        this.correlationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
+        this.factorMatrix = factorMatrix.toArray2();
+        this.correlationMatrix = factorMatrix.mmul(factorMatrix.transpose()).toArray2();
     }
 
     abstract void generateCorrelationMatrices(

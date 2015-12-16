@@ -53,6 +53,11 @@ import net.finmath.time.TimeDiscretizationInterface;
  */
 public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduct {
 
+    public enum MultiCurveApproximation {
+        DRIFT_FREEZE,
+        INTEGRATED_EXPECTATION,
+    }
+
     private final double      swaprate;
     private final double[]    swapTenor;       // Vector of swap tenor (period start and end dates). Start of first period is the option maturity.
     private ValueUnit   valueUnit;
@@ -113,6 +118,10 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
         return getValues(evaluationTime, model, this.valueUnit);
     }
 
+    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, ValueUnit valueUnit) {
+        return getValues(evaluationTime, model, valueUnit, MultiCurveApproximation.INTEGRATED_EXPECTATION);
+    }
+
     /**
      * Calculates the approximated integrated instantaneous variance of the swap rate,
      * using the approximation d log(S(t))/d log(L(t)) = d log(S(0))/d log(L(0)).
@@ -124,7 +133,7 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
      * or the value using the Black formula (ValueUnit.VALUE).
      * @TODO make initial values an arg and use evaluation time.
      */
-    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, ValueUnit valueUnit) {
+    public RandomVariableInterface getValues(double evaluationTime, LIBORMarketModelInterface model, ValueUnit valueUnit, MultiCurveApproximation multiCurveApproximation) {
         if(evaluationTime > 0) throw new RuntimeException("Forward start evaluation currently not supported.");
 
         double swapStart    = swapTenor[0];
@@ -136,7 +145,7 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
 
         double integratedSwapRateVariance;
         if (model instanceof MultiCurveLIBORMarketModel) {
-            integratedSwapRateVariance = calculateIntegratedSwapRateVarianceMultiCurve((MultiCurveLIBORMarketModel) model, swapStartIndex, swapEndIndex, optionMaturityIndex);
+            integratedSwapRateVariance = calculateIntegratedSwapRateVarianceMultiCurve((MultiCurveLIBORMarketModel) model, swapStartIndex, swapEndIndex, optionMaturityIndex, multiCurveApproximation);
         } else {
             integratedSwapRateVariance = calculateIntegratedSwapRateVarianceSingleCurve(model, swapStartIndex, swapEndIndex, optionMaturityIndex);
         }
@@ -161,76 +170,191 @@ public class SwaptionAnalyticApproximation extends AbstractLIBORMonteCarloProduc
         return new RandomVariable(evaluationTime, valueSwaption);
     }
 
-    private double calculateIntegratedSwapRateVarianceMultiCurve(MultiCurveLIBORMarketModel model, int swapStartIndex, int swapEndIndex, int optionMaturityIndex) {
-        double[] swapCovarianceWeights = calculateSwapCovarianceWeights(model);
-
+    private double calculateIntegratedSwapRateVarianceMultiCurve(MultiCurveLIBORMarketModel model, int swapStartIndex, int swapEndIndex, int optionMaturityIndex, MultiCurveApproximation multiCurveApproximation) {
         // Get the integrated libor covariance from the model
         double[][][][]	integratedLIBORCovariance = model.getIntegratedLIBORCovariances();
 
         TimeDiscretizationInterface liborPeriodDiscretization = model.getLiborPeriodDiscretization();
+
         RandomVariableInterface[] realization = model.getInitialState();
+        RandomVariableInterface[][] realizations = new RandomVariableInterface[optionMaturityIndex + 1][];
+        double[] swapRates = new double[optionMaturityIndex + 1];
+        double[][] swapCovarianceWeights = new double[optionMaturityIndex + 1][];
+        if (multiCurveApproximation == MultiCurveApproximation.INTEGRATED_EXPECTATION) {
+            evolveProcessesAndWeights(optionMaturityIndex, swapStartIndex, swapEndIndex, realization, model,
+                    realizations, swapRates, swapCovarianceWeights);
+        } else {
+            realizations[0] = realization;
+            swapRates[0] = swaprate;
+            swapCovarianceWeights[0] = calculateSwapCovarianceWeights(model);
+        }
+
         int numberOfComponents = model.getNumberOfComponents() / 2;
+        int timeEndIndex = multiCurveApproximation == MultiCurveApproximation.INTEGRATED_EXPECTATION ? optionMaturityIndex : 0;
 
         // Calculate integrated swap rate covariance
         double integratedSwapRateVariance = 0.0;
-        for(int componentIndex1 = swapStartIndex; componentIndex1 < swapEndIndex; componentIndex1++) {
-            for(int componentIndex2 = componentIndex1; componentIndex2 < swapEndIndex; componentIndex2++) {
-                double timeStep1 = liborPeriodDiscretization.getTimeStep(componentIndex1);
-                double timeStep2 = liborPeriodDiscretization.getTimeStep(componentIndex2);
+        for (int timeIndex = 0; timeIndex <= timeEndIndex; timeIndex++) {
+            for(int componentIndex1 = swapStartIndex; componentIndex1 < swapEndIndex; componentIndex1++) {
+                for(int componentIndex2 = componentIndex1; componentIndex2 < swapEndIndex; componentIndex2++) {
+                    double timeStep1 = liborPeriodDiscretization.getTimeStep(componentIndex1);
+                    double timeStep2 = liborPeriodDiscretization.getTimeStep(componentIndex2);
 
-                double forward1 = model.applyStateSpaceTransform(componentIndex1, realization[componentIndex1]).getAverage();
-                double forward2 = model.applyStateSpaceTransform(componentIndex2, realization[componentIndex2]).getAverage();
+                    double forwardOfComponent1 = model.applyStateSpaceTransform(componentIndex1, realizations[timeIndex][componentIndex1]).getAverage();
+                    double forwardOfComponent2 = model.applyStateSpaceTransform(componentIndex2, realizations[timeIndex][componentIndex2]).getAverage();
 
-                double spread1 = model.applyStateSpaceTransform(componentIndex1 + numberOfComponents, realization[componentIndex1 + numberOfComponents]).getAverage();
-                double spread2 = model.applyStateSpaceTransform(componentIndex2 + numberOfComponents, realization[componentIndex2 + numberOfComponents]).getAverage();
+                    double spread1 = model.applyStateSpaceTransform(componentIndex1 + numberOfComponents, realizations[timeIndex][componentIndex1 + numberOfComponents]).getAverage();
+                    double spread2 = model.applyStateSpaceTransform(componentIndex2 + numberOfComponents, realizations[timeIndex][componentIndex2 + numberOfComponents]).getAverage();
 
-                if (model.getMultiCurveModel() == MultiCurveLIBORMarketModel.MultiCurveModel.MMARTINGALE) {
-                    double alpha = model.getCorrelationFactor();
+                    if (model.getMultiCurveModel() == MultiCurveLIBORMarketModel.MultiCurveModel.MMARTINGALE) {
+                        double alpha = model.getCorrelationFactor();
 
-                    double coeff1 = spread1 * Math.pow(forward1, alpha - 1.0);
-                    double coeff2 = spread2 * Math.pow(forward2, alpha - 1.0);
+                        double coeff1 = spread1 * Math.pow(forwardOfComponent1, alpha - 1.0);
+                        double coeff2 = spread2 * Math.pow(forwardOfComponent2, alpha - 1.0);
 
-                    double[] coefficients = new double[5];
+                        double[] coefficients = new double[5];
 
-                    coefficients[0] = 1.0;
-                    coefficients[1] = timeStep1 * coeff1 * forward1; //spread1 * Math.pow(forwardOfComponent1, alpha);
-                    coefficients[2] = timeStep2 * coeff2 * forward2; //spread2 * Math.pow(forwardOfComponent2, alpha);
+                        coefficients[0] = 1.0;
+                        coefficients[1] = timeStep1 * coeff1 * forwardOfComponent1; //spread1 * Math.pow(forwardOfComponent1, alpha);
+                        coefficients[2] = timeStep2 * coeff2 * forwardOfComponent2; //spread2 * Math.pow(forwardOfComponent2, alpha);
 
-                    coefficients[3] = coefficients[1] * coefficients[2] + coeff1 * coeff2 * alpha * alpha;
+                        coefficients[3] = coefficients[1] * coefficients[2] + coeff1 * coeff2 * alpha * alpha;
 
-                    coefficients[1] += coeff1 * alpha;
-                    coefficients[2] += coeff2 * alpha;
+                        coefficients[1] += coeff1 * alpha;
+                        coefficients[2] += coeff2 * alpha;
 
-                    coefficients[4] = coeff1 * coeff2 * (
-                            1 + timeStep1 * forward1 + timeStep2 * forward2 +
-                                    timeStep1 * forward1 * timeStep2 * forward2
-                    );
+                        coefficients[4] = coeff1 * coeff2 * (
+                                1 + timeStep1 * forwardOfComponent1 + timeStep2 * forwardOfComponent2 +
+                                        timeStep1 * forwardOfComponent1 * timeStep2 * forwardOfComponent2
+                        );
 
-                    for (int i = 0; i < 5; i++) {
-                        integratedSwapRateVariance += (componentIndex1 == componentIndex2 ? 1.0 : 2.0) *
-                                forward1 * forward2 *
-                                swapCovarianceWeights[componentIndex1-swapStartIndex] * swapCovarianceWeights[componentIndex2-swapStartIndex] *
-                                coefficients[i] * integratedLIBORCovariance[i][optionMaturityIndex][componentIndex1][componentIndex2];
+                        for (int i = 0; i < 5; i++) {
+                            double increment;
+                            if (multiCurveApproximation == MultiCurveApproximation.INTEGRATED_EXPECTATION) {
+                                increment = integratedLIBORCovariance[i][timeIndex][componentIndex1][componentIndex2] -
+                                        (timeIndex > 0 ? integratedLIBORCovariance[i][timeIndex - 1][componentIndex1][componentIndex2] : 0.0);
+                            } else {
+                                increment = integratedLIBORCovariance[i][optionMaturityIndex][componentIndex1][componentIndex2];
+                            }
+
+                            integratedSwapRateVariance += (componentIndex1 == componentIndex2 ? 1.0 : 2.0) *
+                                    forwardOfComponent1 * forwardOfComponent2 *
+                                    swapCovarianceWeights[timeIndex][componentIndex1-swapStartIndex] * swapCovarianceWeights[timeIndex][componentIndex2-swapStartIndex] *
+                                    coefficients[i] * increment;
+                        }
+                    } else {
+                        double coeff1 = 1.0, coeff2 = 1.0, coeff3 = 1.0;
+                        if (model.getMultiCurveModel() == MultiCurveLIBORMarketModel.MultiCurveModel.MULTIPLICATIVE) {
+                            coeff1 = (1.0 + timeStep1 * spread1) * (1.0 + timeStep2 * spread2);
+                            coeff2 = (1.0 + timeStep1 * forwardOfComponent1) * (1.0 + timeStep2 * forwardOfComponent2);
+                            coeff3 = (1.0 + timeStep1 * spread1) * (1.0 + timeStep2 * forwardOfComponent2);
+                        }
+
+                        double[] increment = new double[3];
+                        for (int i = 0; i < 3; i++) {
+                            if (multiCurveApproximation == MultiCurveApproximation.INTEGRATED_EXPECTATION) {
+                                increment[i] = integratedLIBORCovariance[i][timeIndex][componentIndex1][componentIndex2] -
+                                        (timeIndex > 0 ? integratedLIBORCovariance[i][timeIndex - 1][componentIndex1][componentIndex2] : 0.0);
+                            } else {
+                                increment[i] = integratedLIBORCovariance[i][optionMaturityIndex][componentIndex1][componentIndex2];
+                            }
+                        }
+
+                        integratedSwapRateVariance += (componentIndex1 == componentIndex2 ? 1.0 : 2.0)
+                                * swapCovarianceWeights[timeIndex][componentIndex1-swapStartIndex] * swapCovarianceWeights[timeIndex][componentIndex2-swapStartIndex]
+                                * (coeff1 * forwardOfComponent1 * forwardOfComponent2 * increment[0]
+                                + coeff2 * spread1 * spread2 * increment[1]
+                                + coeff3 * forwardOfComponent1 * spread2 * increment[2])
+                                / (swapRates[timeIndex] * swapRates[timeIndex]);
                     }
-                } else {
-                    double coeff1 = 1.0, coeff2 = 1.0, coeff3 = 1.0;
-                    if (model.getMultiCurveModel() == MultiCurveLIBORMarketModel.MultiCurveModel.MULTIPLICATIVE) {
-                        coeff1 = (1.0 + timeStep1 * spread1) * (1.0 + timeStep2 * spread2);
-                        coeff2 = (1.0 + timeStep1 * forward1) * (1.0 + timeStep2 * forward2);
-                        coeff3 = (1.0 + timeStep1 * spread1) * (1.0 + timeStep2 * forward2);
-                    }
-
-                    integratedSwapRateVariance += (componentIndex1 == componentIndex2 ? 1.0 : 2.0) *
-                            swapCovarianceWeights[componentIndex1-swapStartIndex] * swapCovarianceWeights[componentIndex2-swapStartIndex] * (
-                            coeff1 * forward1 * forward2 * integratedLIBORCovariance[0][optionMaturityIndex][componentIndex1][componentIndex2]
-                                    + coeff2 * spread1 * spread2 * integratedLIBORCovariance[1][optionMaturityIndex][componentIndex1][componentIndex2]
-                                    + coeff3 * forward1 * spread2 * integratedLIBORCovariance[2][optionMaturityIndex][componentIndex1][componentIndex2]
-                    );
                 }
             }
         }
 
-        return integratedSwapRateVariance / (swaprate * swaprate);
+        return integratedSwapRateVariance;
+    }
+
+    private void evolveProcessesAndWeights(int optionMaturityIndex, int swapStartIndex, int swapEndIndex,
+                               RandomVariableInterface[] realization, MultiCurveLIBORMarketModel model,
+                               RandomVariableInterface[][] realizations, double[] swapRates, double[][] swapCovarianceWeights) {
+        for (int timeIndex = 0; timeIndex <= optionMaturityIndex; timeIndex++) {
+            realizations[timeIndex] = new RandomVariableInterface[model.getNumberOfComponents()];
+            double dt = model.getTime(timeIndex + 1) - model.getTime(timeIndex);
+
+            TimeDiscretizationInterface liborPeriodDiscretization = model.getLiborPeriodDiscretization();
+
+            int numberOfComponents = model.getNumberOfComponents() / 2;
+            double[] forwardsAtTimeIndex = new double[swapTenor.length];
+            double[] liborsAtTimeIndex = new double[swapTenor.length];
+            for (int k = swapStartIndex; k <= swapEndIndex; k++) {
+                forwardsAtTimeIndex[k - swapStartIndex] = realization[k].exp().getAverage();
+                double spread = realization[k + numberOfComponents].exp().getAverage();
+                liborsAtTimeIndex[k - swapStartIndex] = forwardsAtTimeIndex[k - swapStartIndex] + spread
+                        + (model.getMultiCurveModel() == MultiCurveLIBORMarketModel.MultiCurveModel.ADDITIVE ?
+                        0.0 : liborPeriodDiscretization.getTimeStep(k) * forwardsAtTimeIndex[k - swapStartIndex] * spread);
+            }
+
+            ForwardCurveInterface forwardCurve = ForwardCurve.createForwardCurveFromForwards(null, swapTenor, forwardsAtTimeIndex, 0);
+            ForwardCurveInterface liborCurve = ForwardCurve.createForwardCurveFromForwards(null, swapTenor, liborsAtTimeIndex, 0);
+            DiscountCurveInterface discountCurve = DiscountCurve.createDiscountFactorsFromForwardRates(null, new TimeDiscretization(swapTenor), forwardsAtTimeIndex);
+
+            double[] drift = getDriftUnderSwapMeasure(timeIndex, swapStartIndex, swapEndIndex, realization, model, forwardCurve, discountCurve);
+
+            double swapRate	= net.finmath.marketdata.products.Swap.getForwardSwapRate(new TimeDiscretization(swapTenor), new TimeDiscretization(swapTenor), liborCurve, discountCurve);
+
+            swapCovarianceWeights[timeIndex] = calculateSwapCovarianceWeightsSimple(liborPeriodDiscretization, liborCurve, discountCurve);
+            swapRates[timeIndex] = swapRate;
+
+            for (int component = 0; component < realizations[timeIndex].length; component++) {
+                realizations[timeIndex][component] = realization[component];
+                realization[component] = realization[component].add(drift[component] * dt);
+            }
+        }
+    }
+
+    private double[] getDriftUnderSwapMeasure(int timeIndex, int swapStartIndex, int swapEndIndex,
+                                              RandomVariableInterface[] realizationAtTimeIndex,
+                                              MultiCurveLIBORMarketModel model,
+                                              ForwardCurveInterface forwardCurve, DiscountCurveInterface discountCurve) {
+        double[] drift = new double[model.getNumberOfComponents()];
+
+        TimeDiscretizationInterface liborPeriodDiscretization = model.getLiborPeriodDiscretization();
+        int		firstLiborIndex		= model.getLiborPeriodIndex(model.getTime(timeIndex)) + 1;
+        if(firstLiborIndex<0) firstLiborIndex = -firstLiborIndex;
+
+        int numberOfComponents = model.getNumberOfComponents() / 2;
+
+        double annuity = 0.0;
+        for (int j = swapStartIndex + 1; j <= swapEndIndex; j++) {
+            double timeStep = liborPeriodDiscretization.getTimeStep(j);
+            annuity += timeStep * discountCurve.getDiscountFactor(null, j);
+        }
+
+        for (int k = Math.max(firstLiborIndex, swapStartIndex); k < swapEndIndex; k++) {
+            for (int j = swapStartIndex - 1; j <= swapEndIndex; j++) {
+                double timeStepJ = liborPeriodDiscretization.getTimeStep(j);
+                int start = Math.min(j+1, k+1);
+                int end = Math.max(k, j);
+                for (int i = start; i <= end; i++) {
+                    double time = liborPeriodDiscretization.getTime(i);
+                    double timeStepI = liborPeriodDiscretization.getTimeStep(i);
+                    double forward = forwardCurve.getForward(null, time);
+                    double discountedForward = timeStepI * forward / (1.0 * timeStepI * forward);
+                    RandomVariableInterface covarianceForward = model.getCovarianceModel().getCovariance(timeIndex, k, i, realizationAtTimeIndex);
+                    RandomVariableInterface covarianceSpread = model.getCovarianceModel().getCovariance(timeIndex, k + numberOfComponents, i, realizationAtTimeIndex);
+                    drift[k] += covarianceForward.mult(discountedForward).getAverage();
+                    drift[k + numberOfComponents] += covarianceSpread.mult(discountedForward).getAverage();
+                }
+                double discount = (k >= j ? 1.0 : -1.0) * timeStepJ * discountCurve.getDiscountFactor(null, j) / annuity;
+                drift[k] = drift[k] * discount
+                        - 0.5 * model.getCovarianceModel().getCovariance(timeIndex, k, k, realizationAtTimeIndex).getAverage();
+
+                drift[k + numberOfComponents] = drift[k + numberOfComponents] * discount
+                        - 0.5 * model.getCovarianceModel().getCovariance(timeIndex, k + numberOfComponents, k + numberOfComponents, realizationAtTimeIndex).getAverage();
+            }
+        }
+
+        return drift;
     }
 
     private double calculateIntegratedSwapRateVarianceSingleCurve(LIBORMarketModelInterface model, int swapStartIndex, int swapEndIndex, int optionMaturityIndex) {

@@ -47,7 +47,7 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
     private boolean useSeperateCorrelationModels = false;
     private String tenor = "1m";
     private String productType;
-    private int numberOfSeeds = 1;
+    private int numberOfSeeds = 10;
 
     private boolean calibrateSC = true;
     private boolean calibrateMC = true;
@@ -73,17 +73,17 @@ public class MultiCurveLIBORMarketModelCalibrationTest {
     public static void main(String[] args) throws Exception {
         Integer[] numberOfParams = { 17 };
         Integer[] numberOfFactors = { 10 };
-        Integer[] numberOfPaths = { 5000 };
+        Integer[] numberOfPaths = { 10000 };
         LIBORMarketModel.Measure[] measures = { Measure.SPOT };
         MultiCurveLIBORMarketModel.MultiCurveModel[] models = {
                 MultiCurveLIBORMarketModel.MultiCurveModel.ADDITIVE,
-                //MultiCurveLIBORMarketModel.MultiCurveModel.MULTIPLICATIVE,
+                MultiCurveLIBORMarketModel.MultiCurveModel.MULTIPLICATIVE,
                 //MultiCurveLIBORMarketModel.MultiCurveModel.MMARTINGALE
         };
         Boolean[] useAnalyticApproximation = { true };
         Boolean[] useSeperateCorrelationModels = { false };
         String[] tenors = new String[] { null };
-        String[] swaptionTypes = new String[] { "synthCaplets" };
+        String[] swaptionTypes = new String[] { "synthSwaptions", "synthCaplets" };
 
         Object[][] parameters = new Object[][]{
                 numberOfFactors, numberOfPaths, measures, models, useAnalyticApproximation,

@@ -123,14 +123,18 @@ public abstract class AbstractLIBORCovarianceModelParametric extends AbstractLIB
 		final BrownianMotionInterface brownianMotion = brownianMotionParameter != null ? brownianMotionParameter : new BrownianMotion(getTimeDiscretization(), getNumberOfFactors(), numberOfPaths, seed);
 
 		/*
-		 * We allow for 5 simultaneous calibration models.
+		 * Create separate thread pools for values and derivatives, in order to prevent deadlocks.
+		 * We allow for getParameter().length simultaneous calibration models.
 		 * Note: In the case of a Monte-Carlo calibration, the memory requirement is that of
-		 * one model with 5 times the number of paths. In the case of an analytic calibration
+		 * one model with getParameter().length times the number of paths. In the case of an analytic calibration
 		 * memory requirement is not the limiting factor.
+		 * Note: It is important not to re-create the thread pools on every run, in order to avoid performance issues
+		 * from threading overhead on machines with a large number of processors. This is especially a problem when the
+		 * actual calculations are much faster than the creation of the threads, i.e. with analytic calibration.
 		 */
-		int numberOfThreads = 5;
-		LevenbergMarquardt optimizer = new LevenbergMarquardt(initialParameters, calibrationTargetValues, maxIterations, numberOfThreads)
-		{
+		final ExecutorService executorValues = Executors.newFixedThreadPool(Math.min(Math.max(Runtime.getRuntime().availableProcessors(), 1), calibrationProducts.length));
+		final ExecutorService executorDerivatives = Executors.newFixedThreadPool(Math.min(Math.max(Runtime.getRuntime().availableProcessors(), 1), getParameter().length));
+		LevenbergMarquardt optimizer = new LevenbergMarquardt(initialParameters, calibrationTargetValues, maxIterations, executorDerivatives) {
 			// Calculate model values for given parameters
 			@Override
 			public void setValues(double[] parameters, double[] values) throws SolverException {
@@ -143,25 +147,23 @@ public abstract class AbstractLIBORCovarianceModelParametric extends AbstractLIB
 				final LIBORModelMonteCarloSimulation liborMarketModelMonteCarloSimulation =  new LIBORModelMonteCarloSimulation(model, process);
 
 				ArrayList<Future<Double>> valueFutures = new ArrayList<Future<Double>>(calibrationProducts.length);
-                ExecutorService executor = Executors.newFixedThreadPool(Math.min(Math.max(Runtime.getRuntime().availableProcessors(), 1), calibrationProducts.length));
+
 				for(int calibrationProductIndex=0; calibrationProductIndex<calibrationProducts.length; calibrationProductIndex++) {
 					final int workerCalibrationProductIndex = calibrationProductIndex;
-					Callable<Double> worker = new  Callable<Double>() {
-						public Double call() throws SolverException {
-							try {
-								return calibrationProducts[workerCalibrationProductIndex].getValue(liborMarketModelMonteCarloSimulation);
-							} catch (CalculationException e) {
-                                e.printStackTrace();
-								// We do not signal exceptions to keep the solver working and automatically exclude non-working calibration produtcs.
-								return calibrationTargetValues[workerCalibrationProductIndex];
-							} catch (Exception e) {
-                                e.printStackTrace();
-								// We do not signal exceptions to keep the solver working and automatically exclude non-working calibration produtcs.
-								return calibrationTargetValues[workerCalibrationProductIndex];
-							}
-						}
-					};
-                    Future<Double> valueFuture = executor.submit(worker);
+					Callable<Double> worker = () -> {
+                        try {
+                            return calibrationProducts[workerCalibrationProductIndex].getValue(liborMarketModelMonteCarloSimulation);
+                        } catch (CalculationException e) {
+							e.printStackTrace();
+                            // We do not signal exceptions to keep the solver working and automatically exclude non-working calibration products.
+                            return calibrationTargetValues[workerCalibrationProductIndex];
+                        } catch (Exception e) {
+							e.printStackTrace();
+                            // We do not signal exceptions to keep the solver working and automatically exclude non-working calibration products.
+                            return calibrationTargetValues[workerCalibrationProductIndex];
+                        }
+                    };
+                    Future<Double> valueFuture = executorValues.submit(worker);
                     valueFutures.add(calibrationProductIndex, valueFuture);
 				}
 				for(int calibrationProductIndex=0; calibrationProductIndex<calibrationProducts.length; calibrationProductIndex++) {
@@ -172,9 +174,7 @@ public abstract class AbstractLIBORCovarianceModelParametric extends AbstractLIB
 						throw new SolverException(e);
 					} catch (ExecutionException e) {
 						throw new SolverException(e);
-					} finally {
-                        executor.shutdown();
-                    }
+					}
 				}
 			}
 		};
@@ -185,9 +185,11 @@ public abstract class AbstractLIBORCovarianceModelParametric extends AbstractLIB
 
 		try {
 			optimizer.run();
-		}
-		catch(SolverException e) {
+		} catch(SolverException e) {
 			throw new CalculationException(e);
+		} finally {
+			executorValues.shutdown();
+			executorDerivatives.shutdown();
 		}
 
 		// Get covariance model corresponding to the best parameter set.

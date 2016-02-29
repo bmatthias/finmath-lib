@@ -75,8 +75,8 @@ public class LinearAlgebraBenchmarkTest {
 
                     //Check if the results are the same and in particular check for
                     //concurrency issues with JBlas that would disqualify it for use in multi threaded tasks.
-                    assertTrue(MatrixUtils.matricesAreEqual(mathResult.getDataRef(), jblasResult.toArray2(), 1e-14, 0));
-                    assertTrue(MatrixUtils.matricesAreEqual(mathResult.getDataRef(), javaResult, 1e-14, 0));
+                    assertTrue(MatrixUtils.frobeniusNorm(mathResult.getDataRef(), jblasResult.toArray2()) < 1e-10);
+                    assertTrue(MatrixUtils.frobeniusNorm(mathResult.getDataRef(), javaResult) < 1e-10);
                 }
 
                 return result;
@@ -228,7 +228,11 @@ public class LinearAlgebraBenchmarkTest {
             M.setSubMatrix(firstFactorMatrix, 0, 0);
             M.setSubMatrix(secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
 
-            factorMatrix = N.transpose().multiply(M);
+            double[][] fM = N.transpose().multiply(M).getData();
+            LinearAlgebra.normalizeRows(fM);
+
+            double[][] reducedCorrelationMatrix = new DoubleMatrix(fM).mmul(new DoubleMatrix(fM).transpose()).toArray2();
+            factorMatrix = new Array2DRowRealMatrix(LinearAlgebra.getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));
         } else {
             rrqrDecomposition = new RRQRDecomposition(new Array2DRowRealMatrix(secondCurveCorrelationMatrix));
             if (rrqrDecomposition.getRank(1e-10) == dimension) {
@@ -256,7 +260,11 @@ public class LinearAlgebraBenchmarkTest {
                 M.setSubMatrix(firstFactorMatrix, 0, 0);
                 M.setSubMatrix(secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
 
-                factorMatrix = N.multiply(M);
+                double[][] fM = N.multiply(M).getData();
+                LinearAlgebra.normalizeRows(fM);
+
+                double[][] reducedCorrelationMatrix = new DoubleMatrix(fM).mmul(new DoubleMatrix(fM).transpose()).toArray2();
+                factorMatrix = new Array2DRowRealMatrix(LinearAlgebra.getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));
             } else {
                 Array2DRowRealMatrix correlationMatrix = new Array2DRowRealMatrix(2 * dimension, 2 * dimension);
                 correlationMatrix.setSubMatrix(firstCurveCorrelationMatrix, 0, 0);

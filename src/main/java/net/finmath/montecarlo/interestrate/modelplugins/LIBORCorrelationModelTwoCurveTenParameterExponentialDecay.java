@@ -22,7 +22,7 @@ public class LIBORCorrelationModelTwoCurveTenParameterExponentialDecay extends A
 
     public LIBORCorrelationModelTwoCurveTenParameterExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double[] fixedParameter, boolean isCalibrateable) {
         this(timeDiscretization, liborPeriodDiscretization, numberOfFactors, fixedParameter, new double[] {
-                0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1
+                0.1, 0.1, 0.1, 1.0, 0.1, 0.1, 0.0
         }, isCalibrateable);
     }
 

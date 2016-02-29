@@ -70,13 +70,13 @@ public class AbstractLIBORCorrelationModelCombinedCurvesTest {
         RealMatrix factorMatrix = new Array2DRowRealMatrix(model.factorMatrix);
         double[][] modelCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
 
-        assertTrue(MatrixUtils.matricesAreEqual(modelCorrelationMatrix, correlationMatrix, 1e-10, 0));
+        assertTrue(MatrixUtils.frobeniusNorm(correlationMatrix, modelCorrelationMatrix) < 1e-10);
     }
 
     @Test
     public void testThatCorrelationMatrixIsCorrectAfterFactorization() {
         double[][] correlationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
 
-        assertTrue(MatrixUtils.matricesAreEqual(model.correlationMatrix, correlationMatrix, 1e-10, 0));
+        assertTrue(MatrixUtils.frobeniusNorm(correlationMatrix, model.correlationMatrix) < 1e-10);
     }
 }

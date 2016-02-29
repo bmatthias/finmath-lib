@@ -233,7 +233,7 @@ public class MultiCurveLIBORMarketModelTest {
         TimeDiscretization timeDiscretization = new TimeDiscretization(0.0, 0.5, 1.0, 1.5, 2.0);
         TimeDiscretization liborPeriodDiscretization = new TimeDiscretization(0.0, 0.5, 1.0, 1.5, 2.0);
 
-        AbstractMultiCurveLIBORCorrelationModel correlationModel = new LIBORCorrelationModelSeperateCurveFiveParameterExponentialDecay(
+        AbstractMultiCurveLIBORCorrelationModel correlationModel = new LIBORCorrelationModelSeperateCurveThreeParameterExponentialDecay(
                 timeDiscretization, liborPeriodDiscretization, 8, new double[]{ 0.1, 0.1, 0.1 }, false
         );
         LIBORVolatilityModel volatilityModel = new LIBORVolatilityModelTwoCurveEightParameterExponentialForm(
@@ -274,7 +274,7 @@ public class MultiCurveLIBORMarketModelTest {
         TimeDiscretization timeDiscretization = new TimeDiscretization(0.0, 0.5, 1.0, 1.5, 2.0);
         TimeDiscretization liborPeriodDiscretization = new TimeDiscretization(0.0, 0.5, 1.0, 1.5, 2.0);
 
-        AbstractMultiCurveLIBORCorrelationModel correlationModel = new LIBORCorrelationModelSeperateCurveFiveParameterExponentialDecay(
+        AbstractMultiCurveLIBORCorrelationModel correlationModel = new LIBORCorrelationModelSeperateCurveThreeParameterExponentialDecay(
                 timeDiscretization, liborPeriodDiscretization, 8, new double[]{ 0.1, 0.1, 0.1 }, false
         );
         LIBORVolatilityModel volatilityModel = new LIBORVolatilityModelTwoCurveEightParameterExponentialForm(

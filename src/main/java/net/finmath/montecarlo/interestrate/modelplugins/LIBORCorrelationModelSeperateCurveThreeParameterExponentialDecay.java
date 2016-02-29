@@ -8,6 +8,8 @@ package net.finmath.montecarlo.interestrate.modelplugins;
 import net.finmath.MatrixUtils;
 import net.finmath.functions.LinearAlgebra;
 import net.finmath.time.TimeDiscretizationInterface;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
 import org.jblas.DoubleMatrix;
 
 import java.util.stream.IntStream;
@@ -23,33 +25,14 @@ import java.util.stream.IntStream;
  *
  * @author Christian Fries
  */
-public class LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay extends AbstractLIBORCorrelationModelSeperateCurves {
+public class LIBORCorrelationModelSeperateCurveThreeParameterExponentialDecay extends AbstractLIBORCorrelationModelSeperateCurves {
 
-    private transient double[][]	correlationMatrix;
-    private transient double[][]	factorMatrix;
-
-    public LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double[] fixedParameter, boolean isCalibrateable) {
-        this(timeDiscretization, liborPeriodDiscretization, numberOfFactors, fixedParameter, new double[] {
-                0.1, 0.1, 0.1, 0.1
-        }, isCalibrateable);
+    public LIBORCorrelationModelSeperateCurveThreeParameterExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double[] fixedParameter, boolean isCalibrateable) {
+        this(timeDiscretization, liborPeriodDiscretization, numberOfFactors, fixedParameter, new double[] { 0.1, 0.1, 0.1 }, isCalibrateable);
     }
 
-    public LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double[] fixedParameter, double[] calibrationParameter, boolean isCalibrateable) {
+    public LIBORCorrelationModelSeperateCurveThreeParameterExponentialDecay(TimeDiscretizationInterface timeDiscretization, TimeDiscretizationInterface liborPeriodDiscretization, int numberOfFactors, double[] fixedParameter, double[] calibrationParameter, boolean isCalibrateable) {
         super(timeDiscretization, liborPeriodDiscretization, numberOfFactors, fixedParameter, calibrationParameter, isCalibrateable);
-    }
-
-    @Override
-    public double	getFactorLoading(int timeIndex, int factor, int component) {
-        if(factorMatrix == null) initialize();
-
-        return factorMatrix[component][factor];
-    }
-
-    @Override
-    public double	getCorrelation(int timeIndex, int component1, int component2) {
-        if(correlationMatrix == null) initialize();
-
-        return correlationMatrix[component1][component2];
     }
 
     @Override
@@ -66,8 +49,8 @@ public class LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay ex
         double[][] firstFactorMatrix = LinearAlgebra.factorReduction(firstCurveCorrelationMatrix, numberOfFactors / 2);
         DoubleMatrix secondFactorMatrix = new DoubleMatrix(LinearAlgebra.factorReduction(secondCurveCorrelationMatrix, numberOfFactors / 2));
 
-        double sqrt = Math.sqrt(1.0 - calibrationParameter[3] * calibrationParameter[3]);
-        DoubleMatrix rho = DoubleMatrix.diag(new DoubleMatrix(IntStream.range(0, numberOfFactors / 2).mapToDouble((i) -> calibrationParameter[3]).toArray()));
+        double sqrt = Math.sqrt(1.0 - calibrationParameter[1] * calibrationParameter[1]);
+        DoubleMatrix rho = DoubleMatrix.diag(new DoubleMatrix(IntStream.range(0, numberOfFactors / 2).mapToDouble((i) -> calibrationParameter[1]).toArray()));
         DoubleMatrix sqrtRho = DoubleMatrix.diag(new DoubleMatrix(IntStream.range(0, numberOfFactors / 2).mapToDouble((i) -> sqrt).toArray()));
 
         DoubleMatrix thirdFactorMatrix = secondFactorMatrix.mmul(rho);
@@ -83,14 +66,6 @@ public class LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay ex
     }
 
     @Override
-    void adjustParameters() {
-        calibrationParameter[0] = Math.max(calibrationParameter[0], 0.0);
-        calibrationParameter[1] = Math.min(Math.max(calibrationParameter[1], 0.0), 1.0);
-        calibrationParameter[2] = Math.max(calibrationParameter[2], 0.0);
-        calibrationParameter[3] = Math.min(Math.max(calibrationParameter[3], 0.0), 1.0);
-    }
-
-    @Override
     void generateCorrelationMatrices(int dim, double[][] firstCurveCorrelationMatrix, double[][] secondCurveCorrelationMatrix, double[][] curvesCorrelationMatrix) {
         int timeSteps = getLiborPeriodDiscretization().getNumberOfTimeSteps();
         for (int row = 0; row < timeSteps; row++) {
@@ -99,10 +74,8 @@ public class LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay ex
                 double T1 = liborPeriodDiscretization.getTime(row);
                 double T2 = liborPeriodDiscretization.getTime(col);
 
-                double correlation1 = fixedParameter[1]
-                        + (1 - fixedParameter[1]) * Math.exp(-fixedParameter[0] * Math.abs(T1 - T2) - fixedParameter[2] * Math.max(T1, T2));
-                double correlation2 = calibrationParameter[1]
-                        + (1 - calibrationParameter[1]) * Math.exp(-calibrationParameter[0] * Math.abs(T1 - T2) - calibrationParameter[2] * Math.max(T1, T2));
+                double correlation1 = Math.exp(-fixedParameter[0] * Math.abs(T1 - T2));
+                double correlation2 = Math.exp(-calibrationParameter[0] * Math.abs(T1 - T2));
 
                 firstCurveCorrelationMatrix[row][col] = correlation1;
                 firstCurveCorrelationMatrix[col][row] = correlation1;
@@ -114,5 +87,11 @@ public class LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay ex
             firstCurveCorrelationMatrix[row][row] = 1.0;
             secondCurveCorrelationMatrix[row][row] = 1.0;
         }
+    }
+
+    @Override
+    void adjustParameters() {
+        calibrationParameter[0] = Math.max(calibrationParameter[0], 0.0);
+        calibrationParameter[1] = Math.min(Math.max(calibrationParameter[1], 0.0), 1.0);
     }
 }

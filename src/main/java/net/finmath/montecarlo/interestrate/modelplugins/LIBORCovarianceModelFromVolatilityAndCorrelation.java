@@ -128,7 +128,7 @@ public class LIBORCovarianceModelFromVolatilityAndCorrelation extends AbstractLI
         //IMPORTANT: Otherwise the optimizer may not know that the parameters have been adjusted,
         //leading to bad calibration results!
         if (!Arrays.equals(getParameter(), parameter)) {
-            System.arraycopy(getParameter(), 0, parameter, 0, parameter.length);
+            System.arraycopy(getParameter(), 0, parameter, 0, Math.min(parameter.length, getParameter().length));
         }
 	}
 

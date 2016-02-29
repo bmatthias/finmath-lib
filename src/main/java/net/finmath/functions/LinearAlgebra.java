@@ -386,11 +386,11 @@ public class LinearAlgebra {
             MatrixUtils.setSubMatrix(M, firstFactorMatrix, 0, 0);
             MatrixUtils.setSubMatrix(M, secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
 
-            factorMatrix = N.transpose().mmul(M);
-            /*normalizeRows(factorMatrix.getDataRef());
+            double[][] fM = N.transpose().mmul(M).toArray2();
+            normalizeRows(fM);
 
-            double[][] reducedCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
-            factorMatrix = new Array2DRowRealMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));*/
+            double[][] reducedCorrelationMatrix = new DoubleMatrix(fM).mmul(new DoubleMatrix(fM).transpose()).toArray2();
+            factorMatrix = new DoubleMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));
         } else {
             rrqrDecomposition = new RRQRDecomposition(new Array2DRowRealMatrix(secondCurveCorrelationMatrix));
             if (rrqrDecomposition.getRank(1e-10) == dimension) {
@@ -418,11 +418,11 @@ public class LinearAlgebra {
                 MatrixUtils.setSubMatrix(M, firstFactorMatrix, 0, 0);
                 MatrixUtils.setSubMatrix(M, secondFactorMatrix, dimension, (int) Math.ceil(0.5 * numberOfFactors));
 
-                factorMatrix = N.mmul(M);
-                /*normalizeRows(factorMatrix.getDataRef());
+				double[][] fM = N.mmul(M).toArray2();
+				normalizeRows(fM);
 
-                double[][] reducedCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
-                factorMatrix = new Array2DRowRealMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));*/
+				double[][] reducedCorrelationMatrix = new DoubleMatrix(fM).mmul(new DoubleMatrix(fM).transpose()).toArray2();
+				factorMatrix = new DoubleMatrix(getFactorMatrix(reducedCorrelationMatrix, numberOfFactors));
             } else {
                 DoubleMatrix correlationMatrix = new DoubleMatrix(2 * dimension, 2 * dimension);
                 MatrixUtils.setSubMatrix(correlationMatrix, firstCurveCorrelationMatrix, 0, 0);

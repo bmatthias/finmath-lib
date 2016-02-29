@@ -1,7 +1,6 @@
 package net.finmath.montecarlo.interestrate.modelplugins;
 
 import net.finmath.MatrixUtils;
-import net.finmath.functions.LinearAlgebra;
 import net.finmath.time.TimeDiscretization;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
@@ -12,7 +11,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class LIBORCorrelationModelSeperateCurveNineParameterExponentialDecayTest {
+public class LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecayTest {
 
     //TODO: Eigenvalues change slightly, so matrices are not equal - check if factorization can be improved.
     @Test
@@ -22,8 +21,8 @@ public class LIBORCorrelationModelSeperateCurveNineParameterExponentialDecayTest
         TimeDiscretization timeDiscretization = new TimeDiscretization(0.0, (int) (end / dt), dt);
         int timeSteps = timeDiscretization.getNumberOfTimeSteps();
 
-        LIBORCorrelationModelSeperateCurveNineParameterExponentialDecay model =
-                new LIBORCorrelationModelSeperateCurveNineParameterExponentialDecay(
+        LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay model =
+                new LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay(
                         timeDiscretization,	timeDiscretization, 2 * timeSteps, new double[]{ 0.1, 0.5, 0.1 },
                         new double[]{ 0.1, 0.1, 0.1, 0.1, 0.7, 1.0, 0.3 }, true
                 );
@@ -42,7 +41,7 @@ public class LIBORCorrelationModelSeperateCurveNineParameterExponentialDecayTest
 
         model.initialize();
 
-        assertTrue(MatrixUtils.matricesAreEqual(model.correlationMatrix, originalCorrelationMatrix.getData(), 0.1, 0));
+        assertTrue(MatrixUtils.frobeniusNorm(model.correlationMatrix, originalCorrelationMatrix.getData()) < 0.1);
     }
 
     //TODO: Not a good test. Matrix has negative eigenvalues. The model should not allow this.
@@ -53,8 +52,8 @@ public class LIBORCorrelationModelSeperateCurveNineParameterExponentialDecayTest
         TimeDiscretization timeDiscretization = new TimeDiscretization(0.0, (int) (end / dt), dt);
         int timeSteps = timeDiscretization.getNumberOfTimeSteps();
 
-        LIBORCorrelationModelSeperateCurveNineParameterExponentialDecay model =
-                new LIBORCorrelationModelSeperateCurveNineParameterExponentialDecay(
+        LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay model =
+                new LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay(
                         timeDiscretization,	timeDiscretization, 2 * timeSteps, new double[]{ 0.0, 1.0, 0.1 },
                         new double[]{ 0.1, 0.1, 0.1, 0.1, 0.7, 1.0, 0.3 }, true
                 );
@@ -73,7 +72,7 @@ public class LIBORCorrelationModelSeperateCurveNineParameterExponentialDecayTest
 
         model.initialize();
 
-        assertTrue(MatrixUtils.matricesAreEqual(model.correlationMatrix, originalCorrelationMatrix.getData(), 0.1, 0));
+        assertTrue(MatrixUtils.frobeniusNorm(model.correlationMatrix, originalCorrelationMatrix.getData()) < 1);
     }
 
     @Test
@@ -83,8 +82,8 @@ public class LIBORCorrelationModelSeperateCurveNineParameterExponentialDecayTest
         TimeDiscretization timeDiscretization = new TimeDiscretization(0.0, (int) (end / dt), dt);
         int timeSteps = timeDiscretization.getNumberOfTimeSteps();
 
-        LIBORCorrelationModelSeperateCurveNineParameterExponentialDecay model =
-                new LIBORCorrelationModelSeperateCurveNineParameterExponentialDecay(
+        LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay model =
+                new LIBORCorrelationModelSeperateCurveSevenParameterExponentialDecay(
                         timeDiscretization,	timeDiscretization, timeSteps, new double[]{ 0.1, 0.5, 0.1 },
                         new double[]{ 0.1, 0.1, 0.1, 0.1, 0.7, 1.0, 0.3 }, true
                 );

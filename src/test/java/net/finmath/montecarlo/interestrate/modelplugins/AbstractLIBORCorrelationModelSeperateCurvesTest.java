@@ -105,15 +105,15 @@ public class AbstractLIBORCorrelationModelSeperateCurvesTest {
         RealMatrix factorMatrix = new Array2DRowRealMatrix(model.factorMatrix);
         double[][] modelCorrelationMatrix = factorMatrix.multiply(factorMatrix.transpose()).getData();
 
-        assertTrue(MatrixUtils.matricesAreEqual(modelCorrelationMatrix, model.correlationMatrix, 1e-10, 0));
-        assertTrue(MatrixUtils.matricesAreEqual(modelCorrelationMatrix, correlationMatrix, 1e-10, 0));
+        assertTrue(MatrixUtils.frobeniusNorm(modelCorrelationMatrix, model.correlationMatrix) < 1e-10);
+        assertTrue(MatrixUtils.frobeniusNorm(modelCorrelationMatrix, correlationMatrix) < 1e-10);
     }
 
     @Test
     public void testThatCorrelationMatrixIsCorrectAfterFactorization() {
         init(dim);
 
-        assertTrue(MatrixUtils.matricesAreEqual(model.correlationMatrix, correlationMatrix, 1e-10, 0));
+        assertTrue(MatrixUtils.frobeniusNorm(model.correlationMatrix, correlationMatrix) < 1e-10);
     }
 
     private void init(int numberOfFactors) {

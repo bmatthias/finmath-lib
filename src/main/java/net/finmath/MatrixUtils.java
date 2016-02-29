@@ -12,20 +12,8 @@ public class MatrixUtils {
         return true;
     }
 
-    public static boolean matricesAreEqual(double[][] A, double[][] B, double threshold, int maxViolations) {
-        if(A.length != B.length) return false;
-        int violations = 0;
-        for (int row = 0; row < A.length; row++) {
-            if(A[row].length != B[row].length) return false;
-            for (int col = 0; col < A[row].length; col++) {
-                double a = A[row][col];
-                double b = B[row][col];
-                if(b == 0 && Math.abs(a) > threshold || b != 0 && Math.abs(a / b - 1.0) > threshold) {
-                    violations++;
-                }
-            }
-        }
-        return violations <= maxViolations;
+    public static double frobeniusNorm(double[][] A, double[][] B) {
+        return new DoubleMatrix(A).distance2(new DoubleMatrix(B));
     }
 
     public static String printMatrix(double[][] matrix) {

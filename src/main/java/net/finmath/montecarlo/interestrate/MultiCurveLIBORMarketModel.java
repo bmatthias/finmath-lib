@@ -1,38 +1,32 @@
 package net.finmath.montecarlo.interestrate;
 
 import net.finmath.exception.CalculationException;
-import net.finmath.functions.AnalyticFormulas;
 import net.finmath.marketdata.model.AnalyticModelInterface;
 import net.finmath.marketdata.model.curves.*;
 import net.finmath.marketdata.model.volatilities.AbstractSwaptionMarketData;
-import net.finmath.marketdata.products.Swap;
-import net.finmath.marketdata.products.SwapAnnuity;
 import net.finmath.montecarlo.RandomVariable;
 import net.finmath.montecarlo.interestrate.modelplugins.AbstractLIBORCovarianceModel;
 import net.finmath.montecarlo.interestrate.modelplugins.AbstractLIBORCovarianceModelParametric;
 import net.finmath.montecarlo.interestrate.products.AbstractLIBORMonteCarloProduct;
-import net.finmath.montecarlo.interestrate.products.SwaptionAnalyticApproximation;
-import net.finmath.montecarlo.interestrate.products.SwaptionSimple;
 import net.finmath.montecarlo.model.AbstractModel;
 import net.finmath.montecarlo.process.AbstractProcessInterface;
 import net.finmath.stochastic.RandomVariableInterface;
-import net.finmath.time.RegularSchedule;
-import net.finmath.time.ScheduleInterface;
-import net.finmath.time.TimeDiscretization;
 import net.finmath.time.TimeDiscretizationInterface;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
-public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMarketModelInterface {
+public class MultiCurveLIBORMarketModel extends AbstractModel implements ShiftedLIBORMarketModelInterface {
 
     public enum Measure				{ SPOT, TERMINAL }
     public enum StateSpace			{ NORMAL, LOGNORMAL }
     public enum MultiCurveModel     { ADDITIVE, MULTIPLICATIVE, MMARTINGALE}
 
     private final TimeDiscretizationInterface liborPeriodDiscretization;
+    private ForwardCurveInterface oisShift;
+    private ForwardCurveInterface spreadShift;
     private ForwardCurveInterface forwardRateCurve;
     private ForwardCurveInterface riskFreeCurve;
     private DiscountCurveInterface discountCurve;
@@ -46,21 +40,30 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
     private final ConcurrentHashMap<Integer, RandomVariableInterface> numeraires = new ConcurrentHashMap<>();
     private double[][][][] integratedLIBORCovariance;
     private Double[][] c;
-    private double liborCap = Double.POSITIVE_INFINITY;
+    private double liborCap = 1e20;
 
     public MultiCurveLIBORMarketModel(TimeDiscretizationInterface liborPeriodDiscretization,
                                       AnalyticModelInterface curveModel,
                                       String liborCurveName,
                                       String riskFreeCurveName,
+                                      ForwardCurveInterface oisShift,
+                                      ForwardCurveInterface spreadShift,
                                       AbstractLIBORCovarianceModel covarianceModel,
                                       CalibrationItem[] calibrationItems,
                                       Map<String, ?> properties) throws CalculationException {
         this.liborPeriodDiscretization = liborPeriodDiscretization;
+        this.oisShift = oisShift;
+        this.spreadShift = spreadShift;
         this.forwardRateCurve = curveModel.getForwardCurve(liborCurveName);
         this.riskFreeCurve = curveModel.getForwardCurve(riskFreeCurveName);
         this.discountCurve = curveModel.getDiscountCurve(riskFreeCurve.getDiscountCurveName());
         this.covarianceModel = covarianceModel;
         this.curveModel = curveModel;
+
+        if ((oisShift == null || spreadShift == null) && covarianceModel instanceof AbstractLIBORCovarianceModelParametric) {
+            this.oisShift = ForwardCurve.createForwardCurveFromForwards("oisShift", new double[]{ 0.0 }, new double[]{ 0.0 }, 0.0);
+            this.spreadShift = ForwardCurve.createForwardCurveFromForwards("spreadShift", new double[]{ 0.0 }, new double[]{ 0.0 }, 0.0);
+        }
 
         if(properties != null && properties.containsKey("measure"))	    measure		= Measure.valueOf((properties.get("measure").toString()).toUpperCase());
         if(properties != null && properties.containsKey("stateSpace"))	stateSpace	= StateSpace.valueOf((properties.get("stateSpace").toString()).toUpperCase());
@@ -98,6 +101,16 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
                                       String liborCurveName,
                                       String riskFreeCurveName,
                                       AbstractLIBORCovarianceModel covarianceModel,
+                                      CalibrationItem[] calibrationItems,
+                                      Map<String, ?> properties) throws CalculationException {
+        this(liborPeriodDiscretization, curveModel, liborCurveName, riskFreeCurveName, null, null, covarianceModel, calibrationItems, properties);
+    }
+
+    public MultiCurveLIBORMarketModel(TimeDiscretizationInterface liborPeriodDiscretization,
+                                      AnalyticModelInterface curveModel,
+                                      String liborCurveName,
+                                      String riskFreeCurveName,
+                                      AbstractLIBORCovarianceModel covarianceModel,
                                       AbstractSwaptionMarketData swaptionMarketData,
                                       Map<String, ?> properties) throws CalculationException {
         this(liborPeriodDiscretization,
@@ -122,6 +135,10 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
         return riskFreeCurve;
     }
 
+    public boolean isMultiCurve() {
+        return !forwardRateCurve.equals(riskFreeCurve);
+    }
+
     /* (non-Javadoc)
     * @see net.finmath.montecarlo.model.AbstractModelInterface#setProcess(net.finmath.montecarlo.process.AbstractProcessInterface)
     */
@@ -137,22 +154,30 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
     }
 
     public RandomVariableInterface getForward(int timeIndex, int liborIndex) throws CalculationException {
-        return getProcess().getProcessValue(timeIndex, liborIndex);
+        return getProcess().getProcessValue(timeIndex, liborIndex).sub(getShiftParameter(liborIndex));
+    }
+
+    public RandomVariableInterface getSpread(int timeIndex, int liborIndex) throws CalculationException {
+        return getProcess().getProcessValue(timeIndex, liborIndex + getNumberOfLibors()).sub(getShiftParameter(liborIndex + getNumberOfLibors()));
     }
 
     @Override
     public RandomVariableInterface getProcessValue(int timeIndex, int componentIndex) throws CalculationException {
-        RandomVariableInterface forward = getProcess().getProcessValue(timeIndex, componentIndex);
-        RandomVariableInterface spread = getProcess().getProcessValue(timeIndex, componentIndex + getNumberOfComponents() / 2);
+        RandomVariableInterface forward = getProcess()
+                .getProcessValue(timeIndex, componentIndex)
+                .sub(getShiftParameter(componentIndex));
+        RandomVariableInterface spread = getProcess()
+                .getProcessValue(timeIndex, componentIndex + getNumberOfComponents() / 2)
+                .sub(getShiftParameter(componentIndex + getNumberOfComponents() / 2));
 
         switch (multiCurveModel) {
             case ADDITIVE:
                 return forward.add(spread);
             case MULTIPLICATIVE:
-                return forward.add(spread).add(forward.mult(spread).mult(getTimeDiscretization().getTimeStep(timeIndex)));
+                return forward.add(spread).add(forward.mult(spread).mult(getLiborPeriodDiscretization().getTimeStep(timeIndex)));
             case MMARTINGALE:
                 spread = spread.mult(forward.pow(getCorrelationFactor())).mult(getNormalizationFactor(componentIndex, timeIndex));
-                return forward.add(spread).add(forward.mult(spread).mult(getTimeDiscretization().getTimeStep(timeIndex)));
+                return forward.add(spread).add(forward.mult(spread).mult(getLiborPeriodDiscretization().getTimeStep(timeIndex)));
             default:
                 throw new IllegalArgumentException("Model type " + multiCurveModel + " not supported.");
         }
@@ -204,6 +229,42 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
     @Override
     public AbstractLIBORCovarianceModel getCovarianceModel() {
         return covarianceModel;
+    }
+
+    @Override
+    public double getShiftParameter(int componentIndex) {
+        if (componentIndex < getNumberOfComponents() / 2) {
+            return oisShift != null ? oisShift.getForward(null, liborPeriodDiscretization.getTime(componentIndex)) : 0.0;
+        } else {
+            return spreadShift != null ? spreadShift.getForward(null, liborPeriodDiscretization.getTime(componentIndex - getNumberOfComponents() / 2)) : 0.0;
+        }
+    }
+
+    @Override
+    public double getLIBORShift(int liborIndex) {
+        double unShiftedLibor = forwardRateCurve.getForward(curveModel, liborPeriodDiscretization.getTime(liborIndex));
+
+        RandomVariableInterface[] initialState = getInitialState();
+        RandomVariableInterface forward = applyStateSpaceTransform(liborIndex, initialState[liborIndex]);
+        RandomVariableInterface spread = applyStateSpaceTransform(liborIndex, initialState[liborIndex + getNumberOfComponents() / 2]);
+
+        RandomVariableInterface libor;
+        switch (multiCurveModel) {
+            case ADDITIVE:
+                libor = forward.add(spread);
+                break;
+            case MULTIPLICATIVE:
+                libor = forward.add(spread).add(forward.mult(spread).mult(getLiborPeriodDiscretization().getTimeStep(liborIndex)));
+                break;
+            case MMARTINGALE:
+                spread = spread.mult(forward.pow(getCorrelationFactor())).mult(getNormalizationFactor(liborIndex, liborIndex));
+                libor = forward.add(spread).add(forward.mult(spread).mult(getLiborPeriodDiscretization().getTimeStep(liborIndex)));
+                break;
+            default:
+                throw new IllegalArgumentException("Model type " + multiCurveModel + " not supported.");
+        }
+
+        return libor.getAverage() - unShiftedLibor;
     }
 
     @Override
@@ -290,6 +351,14 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
         return liborPeriodDiscretization.getNumberOfTimeSteps() * 2;
     }
 
+    /**
+     * This function transforms from the normal to the log-normal state-space, if this is a log-normal model.
+     * It does NOT transform from the log-normal into the shifted state-space, if this is a shifted model.
+     *
+     * @param componentIndex The componentIndex of the random variable the transformation should be applied to.
+     * @param randomVariable The random variable to apply the transformation to.
+     * @return The transformed random variable.
+     */
     @Override
     public RandomVariableInterface applyStateSpaceTransform(int componentIndex, RandomVariableInterface randomVariable) {
         RandomVariableInterface value = randomVariable;
@@ -318,8 +387,11 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
                 spread /= (1.0 + timeStep * forward) * Math.pow(forward, getCorrelationFactor());
             }
 
-            double initialForwardState = (stateSpace == StateSpace.LOGNORMAL) ? Math.log(Math.max(forward, 0)) : forward; //We expect positive interest rates
-            double initialSpreadState = (stateSpace == StateSpace.LOGNORMAL) ? Math.log(Math.max(spread, 0)) : spread; //We expect positive spreads
+            forward += getShiftParameter(componentIndex);
+            spread += getShiftParameter(componentIndex + getNumberOfComponents() / 2);
+
+            double initialForwardState = (stateSpace == StateSpace.LOGNORMAL) ? Math.log(Math.max(forward, 0)) : forward;
+            double initialSpreadState = (stateSpace == StateSpace.LOGNORMAL) ? Math.log(Math.max(spread, 0)) : spread;
 
             initialStateRandomVariable[componentIndex] = new RandomVariable(initialForwardState);
             initialStateRandomVariable[componentIndex + getNumberOfComponents() / 2] = new RandomVariable(initialSpreadState);
@@ -431,13 +503,15 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
             for(int componentIndex = firstLiborIndex; componentIndex < getNumberOfComponents() / 2; componentIndex++) {
                 double periodLength	= liborPeriodDiscretization.getTimeStep(componentIndex);
                 RandomVariableInterface forward			= realizationAtTimeIndex[componentIndex];
-                RandomVariableInterface oneStepMeasureTransform = (getProcess().getBrownianMotion().getRandomVariableForConstant(periodLength)).discount(forward, periodLength);
+                RandomVariableInterface oneStepMeasureTransform = (getProcess().getBrownianMotion()
+                        .getRandomVariableForConstant(periodLength)).discount(forward.sub(getShiftParameter(componentIndex)), periodLength);
 
                 if(stateSpace == StateSpace.LOGNORMAL) oneStepMeasureTransform = oneStepMeasureTransform.mult(forward);
 
                 int spreadComponentIndex = componentIndex + getNumberOfComponents() / 2;
-                RandomVariableInterface[]	forwardFactorLoading   	= covarianceModel.getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
-                RandomVariableInterface[]	spreadFactorLoading   	= covarianceModel.getFactorLoading(timeIndex, spreadComponentIndex - k, realizationAtTimeIndex);
+                RandomVariableInterface[]	forwardFactorLoading   	= getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
+                RandomVariableInterface[] spreadFactorLoading = getFactorLoading(timeIndex, spreadComponentIndex - k, realizationAtTimeIndex);
+
                 for(int factorIndex=0; factorIndex < getNumberOfFactors(); factorIndex++) {
                     if (multiCurveModel == MultiCurveModel.ADDITIVE) {
                         covarianceFactorSums[factorIndex] = covarianceFactorSums[factorIndex].addProduct(oneStepMeasureTransform, forwardFactorLoading[factorIndex]);
@@ -460,8 +534,8 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
                 if(stateSpace == StateSpace.LOGNORMAL) oneStepMeasureTransform = oneStepMeasureTransform.mult(forward);
 
                 int spreadComponentIndex = componentIndex + getNumberOfComponents() / 2;
-                RandomVariableInterface[]	forwardFactorLoading   	= covarianceModel.getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
-                RandomVariableInterface[]	spreadFactorLoading   	= covarianceModel.getFactorLoading(timeIndex, spreadComponentIndex, realizationAtTimeIndex);
+                RandomVariableInterface[]	forwardFactorLoading   	= getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
+                RandomVariableInterface[]	spreadFactorLoading   	= getFactorLoading(timeIndex, spreadComponentIndex, realizationAtTimeIndex);
                 for(int factorIndex=0; factorIndex < getNumberOfFactors(); factorIndex++) {
                     drift[componentIndex] = drift[componentIndex].addProduct(covarianceFactorSums[factorIndex], forwardFactorLoading[factorIndex]);
                     if (multiCurveModel == MultiCurveModel.ADDITIVE) {
@@ -481,8 +555,16 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
             // Drift adjustment for log-coordinate in each component
             for(int componentIndex=firstLiborIndex; componentIndex < getNumberOfComponents() / 2; componentIndex++) {
                 int spreadComponentIndex = componentIndex + getNumberOfComponents() / 2;
-                RandomVariableInterface forwardVariance		= covarianceModel.getCovariance(timeIndex, componentIndex, componentIndex, realizationAtTimeIndex);
-                RandomVariableInterface spreadVariance		= covarianceModel.getCovariance(timeIndex, spreadComponentIndex, spreadComponentIndex, realizationAtTimeIndex);
+
+                RandomVariableInterface[] forwardFactorLoading = getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
+                RandomVariableInterface[] spreadFactorLoading = getFactorLoading(timeIndex, spreadComponentIndex, realizationAtTimeIndex);
+                RandomVariableInterface forwardVariance = new RandomVariable(0.0);
+                RandomVariableInterface spreadVariance = new RandomVariable(0.0);
+                for(int factorIndex=0; factorIndex < getNumberOfFactors(); factorIndex++) {
+                    forwardVariance = forwardVariance.addProduct(forwardFactorLoading[factorIndex], forwardFactorLoading[factorIndex]);
+                    spreadVariance = spreadVariance.addProduct(spreadFactorLoading[factorIndex], spreadFactorLoading[factorIndex]);
+                }
+
                 drift[componentIndex] = drift[componentIndex].addProduct(forwardVariance, -0.5);
                 drift[spreadComponentIndex] = drift[spreadComponentIndex].addProduct(spreadVariance, -0.5);
             }
@@ -493,7 +575,15 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
 
     @Override
     public RandomVariableInterface[] getFactorLoading(int timeIndex, int componentIndex, RandomVariableInterface[] realizationAtTimeIndex) {
-        return covarianceModel.getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
+        if (componentIndex >= getNumberOfComponents() / 2 && !isMultiCurve()) {
+            return IntStream.range(0, getNumberOfFactors()).mapToObj((int i) -> new RandomVariable(0.0)).toArray(RandomVariableInterface[]::new);
+        }
+        try {
+            return covarianceModel.getFactorLoading(timeIndex, componentIndex, realizationAtTimeIndex);
+
+        } catch (Exception e) {
+            throw new RuntimeException();
+        }
     }
 
     public double getCorrelationFactor() {
@@ -509,7 +599,7 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
 
             RandomVariableInterface squareIntegratedVolatility = new RandomVariable(0.0);
             for (int timeIndex = 0; timeIndex <= maxTimeIndex; timeIndex++) {
-                RandomVariableInterface[] factorLoadings = covarianceModel.getFactorLoading(timeIndex, componentIndex, null);
+                RandomVariableInterface[] factorLoadings = getFactorLoading(timeIndex, componentIndex, null);
                 for (RandomVariableInterface factorLoading : factorLoadings) {
                     double dt = liborPeriodDiscretization.getTimeStep(timeIndex);
                     squareIntegratedVolatility = squareIntegratedVolatility.addProduct(factorLoading, factorLoading.mult(dt));
@@ -535,7 +625,7 @@ public class MultiCurveLIBORMarketModel extends AbstractModel implements LIBORMa
             RandomVariableInterface[][] factorLoadings = new RandomVariableInterface[getNumberOfComponents()][];
             // Prefetch factor loadings
             for(int componentIndex = 0; componentIndex < getNumberOfComponents(); componentIndex++) {
-                factorLoadings[componentIndex] = getCovarianceModel().getFactorLoading(timeIndex, componentIndex, null);
+                factorLoadings[componentIndex] = getFactorLoading(timeIndex, componentIndex, null);
             }
 
             for (int componentIndex1 = 0; componentIndex1 < numberOfComponents; componentIndex1++) {

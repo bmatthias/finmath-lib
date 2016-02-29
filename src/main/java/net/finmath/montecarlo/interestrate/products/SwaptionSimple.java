@@ -13,6 +13,7 @@ import net.finmath.marketdata.model.curves.ForwardCurveInterface;
 import net.finmath.marketdata.products.Swap;
 import net.finmath.marketdata.products.SwapAnnuity;
 import net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulationInterface;
+import net.finmath.montecarlo.interestrate.ShiftedLIBORMarketModelInterface;
 import net.finmath.stochastic.RandomVariableInterface;
 import net.finmath.time.TimeDiscretization;
 import net.finmath.time.TimeDiscretizationInterface;
@@ -77,9 +78,12 @@ public class SwaptionSimple extends AbstractLIBORMonteCarloProduct {
 		ForwardCurveInterface forwardCurve	= model.getModel().getForwardRateCurve();
 		DiscountCurveInterface discountCurve	= model.getModel().getDiscountCurve();
 
-		double parSwaprate = Swap.getForwardSwapRate(tenor, tenor, forwardCurve, discountCurve);
+		double shift = (model.getModel() instanceof ShiftedLIBORMarketModelInterface) ?
+				Swap.getShift(tenor, tenor, ((ShiftedLIBORMarketModelInterface)model.getModel())) : 0.0;
+
+		double parSwaprate = Swap.getForwardSwapRate(tenor, tenor, forwardCurve, discountCurve) + shift;
 		double optionMaturity = tenor.getTime(0);
-		double strikeSwaprate = swaprate;
+		double strikeSwaprate = swaprate + shift;
 		double swapAnnuity = SwapAnnuity.getSwapAnnuity(tenor, discountCurve);
 
 		double volatility = AnalyticFormulas.blackScholesOptionImpliedVolatility(parSwaprate, optionMaturity, strikeSwaprate, swapAnnuity, value.getAverage());

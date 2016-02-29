@@ -11,6 +11,7 @@ import net.finmath.marketdata.model.curves.CurveInterface;
 import net.finmath.marketdata.model.curves.DiscountCurveFromForwardCurve;
 import net.finmath.marketdata.model.curves.DiscountCurveInterface;
 import net.finmath.marketdata.model.curves.ForwardCurveInterface;
+import net.finmath.montecarlo.interestrate.ShiftedLIBORMarketModelInterface;
 import net.finmath.time.RegularSchedule;
 import net.finmath.time.ScheduleInterface;
 import net.finmath.time.TimeDiscretizationInterface;
@@ -156,6 +157,34 @@ public class Swap extends AbstractAnalyticProduct implements AnalyticProductInte
 			double discountFactor	= discountCurve.getDiscountFactor(model, payment);
 
 			floatLeg += forward * periodLength * discountFactor;
+		}
+
+		double valueFloatLeg = floatLeg / discountCurve.getDiscountFactor(model, evaluationTime);
+
+		return valueFloatLeg / swapAnnuity;
+	}
+
+	static public double getShift(TimeDiscretizationInterface fixTenor, TimeDiscretizationInterface floatTenor, ShiftedLIBORMarketModelInterface lmm) {
+		return getShift(fixTenor, floatTenor, lmm, lmm.getDiscountCurve());
+	}
+
+	static public double getShift(TimeDiscretizationInterface fixTenor, TimeDiscretizationInterface floatTenor, ShiftedLIBORMarketModelInterface lmm, DiscountCurveInterface discountCurve) {
+		RegularSchedule fixSchedule = new RegularSchedule(fixTenor);
+		RegularSchedule floatSchedule = new RegularSchedule(floatTenor);
+		AnalyticModelInterface model = lmm.getAnalyticModel();
+
+		double evaluationTime = fixSchedule.getFixing(0);	// Consider all values
+		double swapAnnuity	= SwapAnnuity.getSwapAnnuity(evaluationTime, fixSchedule, discountCurve, model);
+
+		double floatLeg = 0;
+		for(int periodIndex=0; periodIndex<floatSchedule.getNumberOfPeriods(); periodIndex++) {
+			double fixing			= floatSchedule.getFixing(periodIndex);
+			double payment			= floatSchedule.getPayment(periodIndex);
+			double periodLength		= floatSchedule.getPeriodLength(periodIndex);
+
+			double discountFactor	= discountCurve.getDiscountFactor(model, payment);
+
+			floatLeg += lmm.getLIBORShift(lmm.getLiborPeriodIndex(fixing)) * periodLength * discountFactor;
 		}
 
 		double valueFloatLeg = floatLeg / discountCurve.getDiscountFactor(model, evaluationTime);

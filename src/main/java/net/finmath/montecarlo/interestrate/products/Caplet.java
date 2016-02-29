@@ -8,7 +8,7 @@ package net.finmath.montecarlo.interestrate.products;
 import net.finmath.exception.CalculationException;
 import net.finmath.functions.AnalyticFormulas;
 import net.finmath.montecarlo.interestrate.LIBORModelMonteCarloSimulationInterface;
-import net.finmath.montecarlo.interestrate.MultiCurveLIBORMarketModel;
+import net.finmath.montecarlo.interestrate.ShiftedLIBORMarketModelInterface;
 import net.finmath.stochastic.RandomVariableInterface;
 
 /**
@@ -136,10 +136,15 @@ public class Caplet extends AbstractLIBORMonteCarloProduct {
                     .mult(numeraireAtValuationTime)
                     .div(monteCarloProbabilitiesAtValuationTime);
 
+			double shift = model.getModel() instanceof ShiftedLIBORMarketModelInterface ?
+					((ShiftedLIBORMarketModelInterface)model.getModel()).getLIBORShift(model.getLiborPeriodIndex(maturity)) : 0.0;
+
             double optionMaturity = maturity - evaluationTime;
 			double optionStrike = strike;
 			double payoffUnit = daycountFraction * model.getModel().getDiscountCurve().getDiscountFactor(maturity + periodLength); //TODO: Need discount factor at evaluation time.
-			return model.getRandomVariableForConstant(AnalyticFormulas.blackScholesOptionImpliedVolatility(forward.getAverage(), optionMaturity, optionStrike, payoffUnit, values.getAverage()));
+			return model.getRandomVariableForConstant(AnalyticFormulas.blackScholesOptionImpliedVolatility(
+                    forward.getAverage() + shift, optionMaturity, optionStrike + shift, payoffUnit, values.getAverage()
+            ));
 		} else {
 			throw new IllegalArgumentException("Value unit " + valueUnit + " unsupported.");
 		}
